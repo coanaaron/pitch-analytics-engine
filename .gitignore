@@ -1,3 +1,16 @@
-*.csv
+# SQLite Databases
+*.db
+*.sqlite3
+
+# Python Bytecode & Environments
 __pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Data Files (if raw TrackMan CSVs shouldn't be tracked)
+*.csv
+
+# OS metadata
 .DS_Store

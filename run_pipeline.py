@@ -49,6 +49,26 @@ def setup_database():
             );
         '''))
 
+        conn.execute(text('''
+            CREATE TABLE IF NOT EXISTS box_scores (
+                pitcher TEXT,
+                date DATE,
+                time TIME,
+                ip TEXT,
+                h INTEGER,
+                r INTEGER,
+                two_b INTEGER,
+                three_b INTEGER,
+                hr INTEGER,
+                bb INTEGER,
+                hbp INTEGER,
+                k INTEGER,
+                pitches INTEGER,
+                start_grade TEXT,
+                PRIMARY KEY (pitcher, date, time)
+            );
+        '''))
+
 
 
 def main():
@@ -133,11 +153,38 @@ def main():
                         spin_axis = EXCLUDED.spin_axis;
                 ''')
 
-                
                 conn.execute(metrics_upsert, metrics.to_dict(orient='records'))
 
-    conn.commit()
-    conn.close()
+            box_score = parser.calculate_box_score(pitcher)
+            if not box_score.empty:
+                box_score.columns = box_score.columns.str.lower()
+                box_score = box_score.rename(columns={'2b': 'two_b', '3b': 'three_b'})
+                box_score['date'] = box_score['date'].astype(str)
+                box_score['time'] = box_score['time'].astype(str)
+
+                box_upsert = text('''
+                    INSERT INTO box_scores (
+                        pitcher, date, time, ip, h, r, two_b, three_b, hr, bb, hbp, k, pitches, start_grade
+                    )
+                    VALUES (
+                        :pitcher, :date, :time, :ip, :h, :r, :two_b, :three_b, :hr, :bb, :hbp, :k, :pitches, :start_grade
+                    )
+                    ON CONFLICT (pitcher, date, time)
+                    DO UPDATE SET
+                        ip = EXCLUDED.ip,
+                        h = EXCLUDED.h,
+                        r = EXCLUDED.r,
+                        two_b = EXCLUDED.two_b,
+                        three_b = EXCLUDED.three_b,
+                        hr = EXCLUDED.hr,
+                        bb = EXCLUDED.bb,
+                        hbp = EXCLUDED.hbp,
+                        k = EXCLUDED.k,
+                        pitches = EXCLUDED.pitches,
+                        start_grade = EXCLUDED.start_grade;
+                ''')
+
+                conn.execute(box_upsert, box_score.to_dict(orient='records'))
 
     print(f"Pipeline complete! Raw data successfully aggregated and dumped into PostgreSQL")
 

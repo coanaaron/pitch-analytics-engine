@@ -195,8 +195,8 @@ class BaseballParser:
         ip_decimal = total_outs / 3.0
 
         r = pitcher_df["runs_scored"].sum()
-        k = pitcher_df["kor_bb"].eq("Strikeout").sum()
-        bb = pitcher_df["kor_bb"].eq("Walk").sum()
+        k = pitcher_df["kor_b_b"].eq("Strikeout").sum()
+        bb = pitcher_df["kor_b_b"].eq("Walk").sum()
         hbp = pitcher_df["pitch_call"].eq("HitByPitch").sum()
 
         h = pitcher_df["play_result"].isin(["Single", "Double", "Triple", "HomeRun"]).sum()
@@ -240,7 +240,7 @@ class BaseballParser:
 
 
 
-    def calculate_box_score(self, pitcher_name: str, is_starter: bool = False) -> pd.DataFrame:
+    def calculate_box_score(self, pitcher_name: str) -> pd.DataFrame:
         """
         Filters data for a specific pitcher, applies trackman data filtering,
         aggregates box-score metrics, and integrates a start grade in a clean layout.
@@ -252,8 +252,13 @@ class BaseballParser:
 
         if filtered_df.empty:
             return pd.DataFrame(columns=[
-                'pitcher', 'ip', 'h', 'r', '2b', '3b', 'hr', 'bb', 'hbp', 'k', 'pitches', 'start_grade'
+                'pitcher', 'date', 'time', 'ip', 'h', 'r', '2b', '3b', 'hr', 'bb', 'hbp', 'k', 'pitches', 'start_grade'
             ])
+        
+        is_starter = (filtered_df['inning'].min() == 1)
+        
+        date = filtered_df['date'].iloc[0]
+        time = filtered_df['time'].iloc[0]
 
         total_outs = filtered_df['outs_on_play'].sum()
         ip_full = total_outs // 3
@@ -265,8 +270,8 @@ class BaseballParser:
         three_b = filtered_df["play_result"].eq("Triple").sum()
         hr = filtered_df["play_result"].eq("HomeRun").sum()
 
-        bb = filtered_df["kor_bb"].eq("Walk").sum()
-        k = filtered_df["kor_bb"].eq("Strikeout").sum()
+        bb = filtered_df["kor_b_b"].eq("Walk").sum()
+        k = filtered_df["kor_b_b"].eq("Strikeout").sum()
         hbp = filtered_df["pitch_call"].eq("HitByPitch").sum()
         r = filtered_df["runs_scored"].sum()
 
@@ -276,6 +281,8 @@ class BaseballParser:
 
         box_score_df = pd.DataFrame([{
             "pitcher": pitcher_name,
+            "date": date,
+            "time": time,
             "ip": ip_str,
             "h": h,
             "r": r,

@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import re
 
 class BaseballParser:
 
@@ -16,6 +17,10 @@ class BaseballParser:
         """
         try:
             self.df = pd.read_csv(self.file_path)
+            self.df.columns = [
+                re.sub(r'(?<!^)(?=[A-Z])', '_', col).lower().replace(' ', '_')
+                for col in self.df.columns
+            ]
             return self.df
         except Exception as e:
             print(f"Error reading file {self.file_path}: {e}")
@@ -26,9 +31,9 @@ class BaseballParser:
         """
         Helper to return a list of unique pitcher names found in the dataset.
         """
-        if self.df is None or 'Pitcher' not in self.df.columns:
+        if self.df is None or 'pitcher' not in self.df.columns:
             return []
-        return sorted(self.df['Pitcher'].dropna().unique().tolist())
+        return sorted(self.df['pitcher'].dropna().unique().tolist())
     
 
     def calculate_pitch_metrics(self, pitcher_name: str) -> pd.DataFrame:
@@ -40,75 +45,76 @@ class BaseballParser:
         if self.df is None or self.df.empty:
             return pd.DataFrame()
         
-        filtered_df = self.df[self.df['Pitcher'] == pitcher_name]
+        filtered_df = self.df[self.df['pitcher'] == pitcher_name]
         total_pitches = len(filtered_df)
 
         if total_pitches == 0:
-            return pd.DataFrame(columns=['TaggedPitchType', 'Pitch_Count', 'Avg_Velo', 'Max_Velo', 'Strike_Count', 'Whiff_Count', 'Whiff_Pct', 'CSW_Pct', 'Avg_Spin', 'Avg_Ver_Break', 'Avg_Hor_Break', 'Avg_VAA', 'Horz_Rel', 'Vert_Rel', 'Ext', 'Hard_Hit', 'In_Play', 'Spin_Axis'])
+            return pd.DataFrame(columns=['tagged_pitch_type', 'pitch_count', 'avg_velo', 'max_velo', 'strike_count', 'whiff_count', 'whiff_pct', 'csw_pct', 'avg_spin', 'avg_ver_break', 'avg_hor_break', 'avg_vaa', 'horz_rel', 'vert_rel', 'ext', 'hard_hit', 'in_play', 'spin_axis'])
         
         # Filter out potential misreads (low pitch count threshold)
         if total_pitches > 15:
-            pitch_counts = filtered_df['TaggedPitchType'].value_counts()
+            pitch_counts = filtered_df['tagged_pitch_type'].value_counts()
             valid_p_types = pitch_counts[pitch_counts >= (total_pitches * 0.05)].index
-            filtered_df = filtered_df[filtered_df['TaggedPitchType'].isin(valid_p_types)].copy()
+            filtered_df = filtered_df[filtered_df['tagged_pitch_type'].isin(valid_p_types)].copy()
 
         # Define custom categorical row order for pitch types
         pitch_order = ['Fastball', 'Sinker', 'Cutter', 'Slider', 'Sweeper', 'Curveball', 'ChangeUp', 'Splitter']
-        filtered_df['TaggedPitchType'] = pd.Categorical(
-            filtered_df['TaggedPitchType'], 
+        filtered_df['tagged_pitch_type'] = pd.Categorical(
+            filtered_df['tagged_pitch_type'], 
             categories=pitch_order, 
             ordered=True
         )
 
         swings = ['StrikeSwinging', 'InPlay', 'FoulBallNotFieldable']
-        filtered_df['IsSwing'] = filtered_df['PitchCall'].isin(swings)
-        filtered_df['IsSwingingStrike'] = filtered_df['PitchCall'] == 'StrikeSwinging'
-        filtered_df['IsCalledStrike'] = filtered_df['PitchCall'] == 'StrikeCalled'
+        filtered_df['is_swing'] = filtered_df['pitch_call'].isin(swings)
+        filtered_df['is_swinging_strike'] = filtered_df['pitch_call'] == 'StrikeSwinging'
+        filtered_df['is_called_strike'] = filtered_df['pitch_call'] == 'StrikeCalled'
         
         strikes = ['StrikeSwinging', 'StrikeCalled', 'InPlay', 'FoulBallNotFieldable']
-        filtered_df['IsStrike'] = filtered_df['PitchCall'].isin(strikes)
-        filtered_df['IsInPlay'] = filtered_df['PitchCall'] == 'InPlay'
+        filtered_df['is_strike'] = filtered_df['pitch_call'].isin(strikes)
+        filtered_df['is_in_play'] = filtered_df['pitch_call'] == 'InPlay'
         
-        if 'ExitSpeed' in filtered_df.columns:
-            filtered_df["IsHardHit"] = filtered_df["ExitSpeed"] >= 95
+        if 'exit_speed' in filtered_df.columns:
+            filtered_df["is_hard_hit"] = filtered_df["exit_speed"] >= 95
         else:
-            filtered_df["IsHardHit"] = False
+            filtered_df["is_hard_hit"] = False
 
-        summary = filtered_df.groupby(['Pitcher', 'Date', 'TaggedPitchType'], observed=True).agg(
-            Pitch_Count=('RelSpeed', 'count'),
-            Avg_Velo=('RelSpeed', 'mean'),
-            Max_Velo=('RelSpeed', 'max'),
-            Strike_Count=('IsStrike', 'sum'),
-            Whiff_Count=('IsSwingingStrike', 'sum'),
-            Swing_Count=('IsSwing', 'sum'),
-            Called_Strike_Count=('IsCalledStrike', 'sum'),
-            Avg_Spin=('SpinRate', 'mean'),
-            Avg_Ver_Break=('InducedVertBreak', 'mean'),
-            Avg_Hor_Break=('HorzBreak', 'mean'),
-            Avg_VAA=('VertApprAngle', 'mean'),
-            Horz_Rel=('RelSide', 'mean'),
-            Vert_Rel=('RelHeight', 'mean'),
-            Ext=('Extension', 'mean'),
-            Hard_Hit=('IsHardHit', 'sum'),
-            In_Play=('IsInPlay', 'sum'),
-            Spin_Axis=('SpinAxis', 'mean')
+        summary = filtered_df.groupby(['pitcher', 'date', 'tagged_pitch_type'], observed=True).agg(
+            time=('time', 'first'),
+            pitch_count=('rel_speed', 'count'),
+            avg_velo=('rel_speed', 'mean'),
+            max_velo=('rel_speed', 'max'),
+            strike_count=('is_strike', 'sum'),
+            whiff_count=('is_swinging_strike', 'sum'),
+            swing_count=('is_swing', 'sum'),
+            called_strike_count=('is_called_strike', 'sum'),
+            avg_spin=('spin_rate', 'mean'),
+            avg_ver_break=('induced_vert_break', 'mean'),
+            avg_hor_break=('horz_break', 'mean'),
+            avg_vaa=('vert_appr_angle', 'mean'),
+            horz_rel=('rel_side', 'mean'),
+            vert_rel=('rel_height', 'mean'),
+            ext=('extension', 'mean'),
+            hard_hit=('is_hard_hit', 'sum'),
+            in_play=('is_in_play', 'sum'),
+            spin_axis=('spin_axis', 'mean')
         ).reset_index()
 
-        summary['Whiff_Pct'] = (summary['Whiff_Count'] / summary['Swing_Count'].replace(0, 1) * 100).round(1)
-        summary['CSW_Pct'] = ((summary['Whiff_Count'] + summary['Called_Strike_Count']) / summary['Pitch_Count'].replace(0, 1) * 100).round(1)
+        summary['whiff_pct'] = (summary['whiff_count'] / summary['swing_count'].replace(0, 1) * 100).round(1)
+        summary['csw_pct'] = ((summary['whiff_count'] + summary['called_strike_count']) / summary['pitch_count'].replace(0, 1) * 100).round(1)
 
         ordered_columns = [
-            'Pitcher', 'Date', 'TaggedPitchType', 'Pitch_Count', 'Avg_Velo', 'Max_Velo',
-            'Strike_Count', 'Whiff_Count', 'Whiff_Pct', 'CSW_Pct', 
-            'Avg_Spin', 'Avg_Ver_Break', 'Avg_Hor_Break', 'Avg_VAA', 
-            'Horz_Rel', 'Vert_Rel', 'Ext', 'Hard_Hit', 'In_Play', 'Spin_Axis'
+            'pitcher', 'date', 'time', 'tagged_pitch_type', 'pitch_count', 'avg_velo', 'max_velo',
+            'strike_count', 'whiff_count', 'whiff_pct', 'csw_pct',
+            'avg_spin', 'avg_ver_break', 'avg_hor_break', 'avg_vaa',
+            'horz_rel', 'vert_rel', 'ext', 'hard_hit', 'in_play', 'spin_axis'
         ]
         summary = summary[ordered_columns]
 
         rounding_map = {
-            'Avg_Velo': 1, 'Max_Velo': 1, 'Avg_Spin': 0, 
-            'Avg_Ver_Break': 1, 'Avg_Hor_Break': 1, 'Avg_VAA': 1,
-            'Horz_Rel': 2, 'Vert_Rel': 2, 'Ext': 2, 'Spin_Axis': 0
+            'avg_velo': 1, 'max_velo': 1, 'avg_spin': 0,
+            'avg_ver_break': 1, 'avg_hor_break': 1, 'avg_vaa': 1,
+            'horz_rel': 2, 'vert_rel': 2, 'ext': 2, 'spin_axis': 0
         }
         summary = summary.round(rounding_map)
 
@@ -184,30 +190,30 @@ class BaseballParser:
 
         if pitcher_df.empty:
             return ""
-        
-        total_outs = pitcher_df["OutsOnPlay"].sum()
+
+        total_outs = pitcher_df["outs_on_play"].sum()
         ip_decimal = total_outs / 3.0
 
-        r = pitcher_df["RunsScored"].sum() 
-        k = pitcher_df["KorBB"].eq("Strikeout").sum()
-        bb = pitcher_df["KorBB"].eq("Walk").sum()
-        hbp = pitcher_df["PitchCall"].eq("HitByPitch").sum()
+        r = pitcher_df["runs_scored"].sum()
+        k = pitcher_df["kor_bb"].eq("Strikeout").sum()
+        bb = pitcher_df["kor_bb"].eq("Walk").sum()
+        hbp = pitcher_df["pitch_call"].eq("HitByPitch").sum()
 
-        h = pitcher_df["PlayResult"].isin(["Single", "Double", "Triple", "HomeRun"]).sum()
-        two_b = pitcher_df["PlayResult"].eq("Double").sum()
-        three_b = pitcher_df["PlayResult"].eq("Triple").sum()
-        hr = pitcher_df["PlayResult"].eq("HomeRun").sum()
+        h = pitcher_df["play_result"].isin(["Single", "Double", "Triple", "HomeRun"]).sum()
+        two_b = pitcher_df["play_result"].eq("Double").sum()
+        three_b = pitcher_df["play_result"].eq("Triple").sum()
+        hr = pitcher_df["play_result"].eq("HomeRun").sum()
 
         raw_score = (
-            4.03 + 
-            (0.95 * ip_decimal) + 
-            (-0.79 * r) + 
-            (0.16 * k) + 
-            (-0.22 * bb) + 
-            (0.02 * hbp) + 
-            (-0.15 * h) + 
-            (-0.08 * two_b) + 
-            (-0.22 * three_b) + 
+            4.03 +
+            (0.95 * ip_decimal) +
+            (-0.79 * r) +
+            (0.16 * k) +
+            (-0.22 * bb) +
+            (0.02 * hbp) +
+            (-0.15 * h) +
+            (-0.08 * two_b) +
+            (-0.22 * three_b) +
             (-0.14 * hr)
         )
 
@@ -241,45 +247,48 @@ class BaseballParser:
         """
         if self.df is None or self.df.empty:
             return pd.DataFrame()
-        
-        filtered_df = self.df[self.df['Pitcher'] == pitcher_name]
+
+        filtered_df = self.df[self.df['pitcher'] == pitcher_name]
 
         if filtered_df.empty:
-            return pd.DataFrame(columns=['Pitcher', 'IP', 'H', 'R', '2B', '3B', 'HR', 'BB', 'HBP', 'K', 'Pitches', 'Start_Grade'])
-        
-        total_outs = filtered_df['OutsOnPlay'].sum()
+            return pd.DataFrame(columns=[
+                'pitcher', 'ip', 'h', 'r', '2b', '3b', 'hr', 'bb', 'hbp', 'k', 'pitches', 'start_grade'
+            ])
+
+        total_outs = filtered_df['outs_on_play'].sum()
         ip_full = total_outs // 3
         ip_partial = total_outs % 3
         ip_str = f"{ip_full}.{ip_partial}" if ip_partial > 0 else f"{ip_full}"
 
-        h = filtered_df["PlayResult"].isin(["Single", "Double", "Triple", "HomeRun"]).sum()
-        two_b = filtered_df["PlayResult"].eq("Double").sum()
-        three_b = filtered_df["PlayResult"].eq("Triple").sum()
-        hr = filtered_df["PlayResult"].eq("HomeRun").sum()
+        h = filtered_df["play_result"].isin(["Single", "Double", "Triple", "HomeRun"]).sum()
+        two_b = filtered_df["play_result"].eq("Double").sum()
+        three_b = filtered_df["play_result"].eq("Triple").sum()
+        hr = filtered_df["play_result"].eq("HomeRun").sum()
 
-        bb = filtered_df["KorBB"].eq("Walk").sum()
-        k = filtered_df["KorBB"].eq("Strikeout").sum()
-        hbp = filtered_df["PitchCall"].eq("HitByPitch").sum()
-        r = filtered_df["RunsScored"].sum()
+        bb = filtered_df["kor_bb"].eq("Walk").sum()
+        k = filtered_df["kor_bb"].eq("Strikeout").sum()
+        hbp = filtered_df["pitch_call"].eq("HitByPitch").sum()
+        r = filtered_df["runs_scored"].sum()
 
         pitches = len(filtered_df)
 
-        start_grade = start_grade_calculator(filtered_df) if is_starter else None
+        start_grade = self.start_grade_calculator(filtered_df) if is_starter else None
 
         box_score_df = pd.DataFrame([{
-            "IP": ip_str,
-            "H": h,
-            "R": r,
-            "2B": two_b,
-            "3B": three_b,
-            "HR": hr,
-            "BB": bb,
-            "HBP": hbp,
-            "K": k,
-            "Pitches": pitches,
-            "Start_Grade": start_grade
+            "pitcher": pitcher_name,
+            "ip": ip_str,
+            "h": h,
+            "r": r,
+            "2b": two_b,
+            "3b": three_b,
+            "hr": hr,
+            "bb": bb,
+            "hbp": hbp,
+            "k": k,
+            "pitches": pitches,
+            "start_grade": start_grade
         }])
-        
+
         return box_score_df
 
 
@@ -290,18 +299,18 @@ class BaseballParser:
         Returns an empty list if the pitcher is not found or data is missing.
         """
 
-        if self.df is None or self.df.empty or 'Pitcher' not in self.df.columns:
+        if self.df is None or self.df.empty or 'pitcher' not in self.df.columns:
             return []
-        
-        filtered_df = self.df[self.df['Pitcher'] == pitcher_name]
+
+        filtered_df = self.df[self.df['pitcher'] == pitcher_name]
         if filtered_df.empty:
             return []
-        
+
         first_pitch = filtered_df.iloc[0]
-        batter_team = first_pitch.get('BatterTeam')
+        batter_team = first_pitch.get('batter_team')
         opponent_str = f"vs {batter_team}" if batter_team else None
-        handedness = first_pitch.get('PitcherThrows')
-        
+        handedness = first_pitch.get('pitcher_throws')
+
         if handedness and isinstance(handedness, str):
             hand_letter = handedness[0].upper()
             pitcher_throws_str = f"({hand_letter}HP)"
@@ -311,9 +320,10 @@ class BaseballParser:
         return [
             pitcher_name,
             pitcher_throws_str,
-            first_pitch.get('Date'),
+            first_pitch.get('date'),
+            first_pitch.get('time'),
             opponent_str,
-            first_pitch.get('Stadium')
+            first_pitch.get('stadium')
         ]
 
 

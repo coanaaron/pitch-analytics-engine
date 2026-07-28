@@ -4,7 +4,7 @@ from typing import Optional
 
 class MetaDataResponse(BaseModel):
     pitcher: str
-    pitcher_throws: Optional[str] = None
+    handedness: Optional[str] = None
     date: date
     time: time
     opponent: Optional[str] = None

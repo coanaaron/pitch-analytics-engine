@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional
@@ -15,6 +16,18 @@ app = FastAPI(
     version="1.0.0"
 )
 
+origins = [
+    "http://localhost:5173", # Vite
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.get(
     "/api/v1/metadata",
     response_model=List[MetaDataResponse],
@@ -23,23 +36,22 @@ app = FastAPI(
 )
 
 def get_metadata(
+    game_i_d: Optional[str] = Query(None, description="Filter by Game ID"),
     game_date: Optional[date] = Query(None, description="Filter by game date (YYYY-MM-DD)"),
-    game_time: Optional[time] = Query(None, description="Filter by start time (useful for doubleheaders)"),
     db: Session = Depends(get_db)
 ):
     """
-    Retrieves game metadata. Optionally filter by a specific date and time.
+    Retrieves game metadata. Optionally filter by a specific date or game ID.
     """
     query = "SELECT * FROM metadata WHERE 1=1"
     params = {}
 
-    if game_date:
+    if game_i_d:
+        query += " AND game_i_d = :game_i_d"
+        params["game_i_d"] = game_i_d
+    elif game_date:
         query += " AND date = :game_date"
         params["game_date"] = game_date
-
-    if game_time:
-        query += " AND time = :game_time"
-        params["game_time"] = game_time
 
     df = pd.read_sql(text(query), con=db.connection(), params=params)
 
@@ -61,27 +73,30 @@ def get_metadata(
 )
 
 def get_box_score(
-    game_date: date = Query(..., description="Game date"),
-    game_time: Optional[time] = Query(None, description="Filter by start time (useful for doubleheaders)"),
+    game_i_d: Optional[str] = Query(None, description="Filter by Game ID"),
+    game_date: Optional[date] = Query(None, description="Game date"),
     db: Session = Depends(get_db)
 ):
     """
-    Retrieves game box score. Filter by a specific date and an optional time.
+    Retrieves game box score. Optionally filter by a specific date or game ID.
     """
 
-    query = "SELECT * FROM box_scores WHERE date = :game_date"
-    params = {"game_date": game_date}
+    query = "SELECT * FROM box_scores WHERE 1=1"
+    params = {}
 
-    if game_time:
-        query += " AND time = :game_time"
-        params["game_time"] = game_time
+    if game_i_d:
+        query += " AND game_i_d = :game_i_d"
+        params["game_i_d"] = game_i_d
+    elif game_date:
+        query += " AND date = :game_date"
+        params["game_date"] = game_date
     
     df = pd.read_sql(text(query), con=db.connection(), params=params)
 
     if df.empty:
         raise HTTPException(
             status_code=404,
-            detail="No box score found for specified date/time."
+            detail="No box score found for specified date/gameID."
         )
     
     df["date"] = df["date"].astype(str)
@@ -101,30 +116,35 @@ def get_box_score(
 )
 
 def get_pitch_metrics(
-    game_date: date = Query(..., description="Game date"),
-    game_time: Optional[time] = Query(None, description="Filter by start time (useful for doubleheaders)"),
+    game_i_d: Optional[str] = Query(None, description="Filter by Game ID"),
+    game_date: Optional[date] = Query(None, description="Game date"),
     db: Session = Depends(get_db)
 ):
     """
-    Retrieves pitch metrics. Filter by a specific date and an optional time.
+    Retrieves pitch metrics. Optionally filter by a specific date or game ID.
     """
 
-    query = "SELECT * FROM pitch_metrics WHERE date = :game_date"
-    params = {"game_date": game_date}
+    query = "SELECT * FROM pitch_metrics WHERE 1=1"
+    params = {}
 
-    if game_time:
-        query += " AND time = :game_time"
-        params["game_time"] = game_time
+    if game_i_d:
+        query += " AND game_i_d = :game_i_d"
+        params["game_i_d"] = game_i_d
+    elif game_date:
+        query += " AND date = :game_date"
+        params["game_date"] = game_date
     
     df = pd.read_sql(text(query), con=db.connection(), params=params)
 
     if df.empty:
         raise HTTPException(
             status_code=404,
-            detail="No pitch metrics found for specified date/time."
+            detail="No pitch metrics found for specified date/gameID."
         )
     
     df["date"] = df["date"].astype(str)
     df["time"] = df["time"].astype(str)
     
     return df.to_dict(orient="records")
+
+

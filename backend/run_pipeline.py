@@ -12,18 +12,20 @@ def setup_database():
 
         conn.execute(text('''
             CREATE TABLE IF NOT EXISTS metadata (
+                game_i_d TEXT,
                 pitcher TEXT,
                 handedness TEXT,
                 date DATE,
                 time TIME,
                 opponent TEXT,
                 stadium TEXT,
-                PRIMARY KEY (pitcher, date, time) 
+                PRIMARY KEY (game_i_d, pitcher) 
             );
         '''))
 
         conn.execute(text('''
             CREATE TABLE IF NOT EXISTS pitch_metrics (
+                game_i_d TEXT,
                 pitcher TEXT,
                 date DATE,
                 time TIME,
@@ -45,12 +47,13 @@ def setup_database():
                 hard_hit INTEGER,
                 in_play INTEGER,
                 spin_axis REAL,
-                PRIMARY KEY (pitcher, date, time, tagged_pitch_type) 
+                PRIMARY KEY (game_i_d, pitcher, tagged_pitch_type) 
             );
         '''))
 
         conn.execute(text('''
             CREATE TABLE IF NOT EXISTS box_scores (
+                game_i_d TEXT,
                 pitcher TEXT,
                 date DATE,
                 time TIME,
@@ -65,7 +68,7 @@ def setup_database():
                 k INTEGER,
                 pitches INTEGER,
                 start_grade TEXT,
-                PRIMARY KEY (pitcher, date, time)
+                PRIMARY KEY (game_i_d, pitcher)
             );
         '''))
 
@@ -98,21 +101,24 @@ def main():
             meta = parser.get_metadata(pitcher)
             if meta:
                 upsert_query = text('''
-                    INSERT INTO metadata (pitcher, handedness, date, time, opponent, stadium)
-                    VALUES (:pitcher, :handedness, :date, :time, :opponent, :stadium)
-                    ON CONFLICT (pitcher, date, time) 
+                    INSERT INTO metadata (game_i_d, pitcher, handedness, date, time, opponent, stadium)
+                    VALUES (:game_i_d, :pitcher, :handedness, :date, :time, :opponent, :stadium)
+                    ON CONFLICT (game_i_d, pitcher) 
                     DO UPDATE SET 
                         handedness = EXCLUDED.handedness,
+                        date = EXCLUDED.date,
+                        time = EXCLUDED.time,
                         opponent = EXCLUDED.opponent,       
                         stadium = EXCLUDED.stadium;
                 ''')
                 conn.execute(upsert_query, {
-                    "pitcher": meta[0],
-                    "handedness": meta[1],
-                    "date": str(meta[2]),
-                    "time": str(meta[3]),
-                    "opponent": meta[4],
-                    "stadium": meta[5]
+                    "game_i_d": meta[0],
+                    "pitcher": meta[1],
+                    "handedness": meta[2],
+                    "date": str(meta[3]),
+                    "time": str(meta[4]),
+                    "opponent": meta[5],
+                    "stadium": meta[6]
                 })
 
             metrics = parser.calculate_pitch_metrics(pitcher)
@@ -122,18 +128,20 @@ def main():
 
                 metrics_upsert = text('''
                     INSERT INTO pitch_metrics (
-                        pitcher, date, time, tagged_pitch_type, pitch_count, 
+                        game_i_d, pitcher, date, time, tagged_pitch_type, pitch_count, 
                         avg_velo, max_velo, strike_count, whiff_count, whiff_pct, 
                         csw_pct, avg_spin, avg_ver_break, avg_hor_break, avg_vaa, 
                         horz_rel, vert_rel, ext, hard_hit, in_play, spin_axis
                     ) VALUES (
-                        :pitcher, :date, :time, :tagged_pitch_type, :pitch_count, 
+                        :game_i_d, :pitcher, :date, :time, :tagged_pitch_type, :pitch_count, 
                         :avg_velo, :max_velo, :strike_count, :whiff_count, :whiff_pct, 
                         :csw_pct, :avg_spin, :avg_ver_break, :avg_hor_break, :avg_vaa, 
                         :horz_rel, :vert_rel, :ext, :hard_hit, :in_play, :spin_axis
                     )
-                    ON CONFLICT (pitcher, date, time, tagged_pitch_type) 
+                    ON CONFLICT (game_i_d, pitcher, tagged_pitch_type) 
                     DO UPDATE SET
+                        date = EXCLUDED.date,
+                        time = EXCLUDED.time,
                         pitch_count = EXCLUDED.pitch_count,
                         avg_velo = EXCLUDED.avg_velo,
                         max_velo = EXCLUDED.max_velo,
@@ -164,13 +172,15 @@ def main():
 
                 box_upsert = text('''
                     INSERT INTO box_scores (
-                        pitcher, date, time, ip, h, r, two_b, three_b, hr, bb, hbp, k, pitches, start_grade
+                        game_i_d, pitcher, date, time, ip, h, r, two_b, three_b, hr, bb, hbp, k, pitches, start_grade
                     )
                     VALUES (
-                        :pitcher, :date, :time, :ip, :h, :r, :two_b, :three_b, :hr, :bb, :hbp, :k, :pitches, :start_grade
+                        :game_i_d, :pitcher, :date, :time, :ip, :h, :r, :two_b, :three_b, :hr, :bb, :hbp, :k, :pitches, :start_grade
                     )
-                    ON CONFLICT (pitcher, date, time)
+                    ON CONFLICT (game_i_d, pitcher)
                     DO UPDATE SET
+                        date = EXCLUDED.date,
+                        time = EXCLUDED.time,
                         ip = EXCLUDED.ip,
                         h = EXCLUDED.h,
                         r = EXCLUDED.r,

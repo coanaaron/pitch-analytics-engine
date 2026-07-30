@@ -1,19 +1,25 @@
-# SQLite Databases
-*.db
-*.sqlite3
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+.eslintcache
+*.local
 
-# Python Bytecode & Environments
+# Python / Backend
 __pycache__/
 *.py[cod]
-.venv/
+*$py.class
 venv/
+.venv/
 env/
-
-# Data Files (if raw TrackMan CSVs shouldn't be tracked)
+*.sqlite3
+*.db
 *.csv
 
-# OS metadata
-.DS_Store
-
-# Environment variables / secrets
+# OS & Environment Files
 .env
+.env.local
+.DS_Store
+.idea/
+.vscode/

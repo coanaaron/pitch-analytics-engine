@@ -3,6 +3,7 @@ from datetime import date, time
 from typing import Optional
 
 class MetaDataResponse(BaseModel):
+    game_i_d: str
     pitcher: str
     handedness: Optional[str] = None
     date: date
@@ -13,6 +14,7 @@ class MetaDataResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class BoxScoreResponse(BaseModel):
+    game_i_d: str
     pitcher: str
     date: date
     time: time
@@ -31,6 +33,7 @@ class BoxScoreResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class PitchMetricsResponse(BaseModel):
+    game_i_d: str
     pitcher: str
     date: date
     time: time

@@ -79,7 +79,8 @@ class BaseballParser:
         else:
             filtered_df["is_hard_hit"] = False
 
-        summary = filtered_df.groupby(['pitcher', 'date', 'tagged_pitch_type'], observed=True).agg(
+        summary = filtered_df.groupby(['pitcher', 'game_i_d', 'tagged_pitch_type'], observed=True).agg(
+            date=('date', 'first'),
             time=('time', 'first'),
             pitch_count=('rel_speed', 'count'),
             avg_velo=('rel_speed', 'mean'),
@@ -104,7 +105,7 @@ class BaseballParser:
         summary['csw_pct'] = ((summary['whiff_count'] + summary['called_strike_count']) / summary['pitch_count'].replace(0, 1) * 100).round(1)
 
         ordered_columns = [
-            'pitcher', 'date', 'time', 'tagged_pitch_type', 'pitch_count', 'avg_velo', 'max_velo',
+            'game_i_d', 'pitcher', 'date', 'time', 'tagged_pitch_type', 'pitch_count', 'avg_velo', 'max_velo',
             'strike_count', 'whiff_count', 'whiff_pct', 'csw_pct',
             'avg_spin', 'avg_ver_break', 'avg_hor_break', 'avg_vaa',
             'horz_rel', 'vert_rel', 'ext', 'hard_hit', 'in_play', 'spin_axis'
@@ -257,6 +258,7 @@ class BaseballParser:
         
         is_starter = (filtered_df['inning'].min() == 1)
         
+        game_i_d = filtered_df['game_i_d'].iloc[0]
         date = filtered_df['date'].iloc[0]
         time = filtered_df['time'].iloc[0]
 
@@ -280,6 +282,7 @@ class BaseballParser:
         start_grade = self.start_grade_calculator(filtered_df) if is_starter else None
 
         box_score_df = pd.DataFrame([{
+            "game_i_d": game_i_d,
             "pitcher": pitcher_name,
             "date": date,
             "time": time,
@@ -312,7 +315,7 @@ class BaseballParser:
         filtered_df = self.df[self.df['pitcher'] == pitcher_name]
         if filtered_df.empty:
             return []
-
+        
         first_pitch = filtered_df.iloc[0]
         batter_team = first_pitch.get('batter_team')
         opponent_str = f"vs {batter_team}" if batter_team else None
@@ -325,6 +328,7 @@ class BaseballParser:
             pitcher_throws_str = None
 
         return [
+            first_pitch.get('game_i_d'),
             pitcher_name,
             pitcher_throws_str,
             first_pitch.get('date'),

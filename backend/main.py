@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -9,6 +9,7 @@ import numpy as np
 
 from database import get_db
 from schemas import MetaDataResponse, BoxScoreResponse, PitchMetricsResponse
+from run_pipeline import process_dataframe_and_store
 
 app = FastAPI(
     title="Baseball Analytics Pipeline API",
@@ -94,10 +95,7 @@ def get_box_score(
     df = pd.read_sql(text(query), con=db.connection(), params=params)
 
     if df.empty:
-        raise HTTPException(
-            status_code=404,
-            detail="No box score found for specified date/gameID."
-        )
+        return []
     
     df["date"] = df["date"].astype(str)
     df["time"] = df["time"].astype(str)
@@ -137,10 +135,7 @@ def get_pitch_metrics(
     df = pd.read_sql(text(query), con=db.connection(), params=params)
 
     if df.empty:
-        raise HTTPException(
-            status_code=404,
-            detail="No pitch metrics found for specified date/gameID."
-        )
+        return[]
     
     df["date"] = df["date"].astype(str)
     df["time"] = df["time"].astype(str)
@@ -148,3 +143,42 @@ def get_pitch_metrics(
     return df.to_dict(orient="records")
 
 
+@app.post(
+    "/api/v1/upload",
+    summary="Upload and Process TrackMan CSV",
+    tags=["Ingestion"]
+)
+
+async def upload_trackman_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    '''
+    Parses an uploaded TrackMan CSV file, calculates pitch metrics/box scores,
+    upserts all records into PostgreSQL, and returns the parsed report data.
+    '''
+
+    df = pd.read_csv(file.file)
+    processed_pitchers = process_dataframe_and_store(df)
+
+    if not processed_pitchers:
+        raise HTTPException(
+            status_code=400,
+            detail="No valid pitcher data found in the uploaded CSV."
+        )
+
+    game_id = None
+    if "GameID" in df.columns:
+        game_id = str(df["GameID"].iloc[0])
+    elif "game_i_d" in df.columns:
+        game_id = str(df["game_i_d"].iloc[0])
+
+    metadata_list = get_metadata(game_i_d=game_id, game_date=None, db=db) 
+    box_score_list = get_box_score(game_i_d=game_id, game_date=None, db=db)
+    pitch_metrics_list = get_pitch_metrics(game_i_d=game_id, game_date=None, db=db)
+
+    return {
+        "metadata": metadata_list[0] if metadata_list else {},
+        "box_score": box_score_list[0] if box_score_list else {},
+        "pitch_metrics": pitch_metrics_list
+    }

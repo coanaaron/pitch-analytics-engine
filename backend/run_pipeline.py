@@ -74,29 +74,31 @@ def setup_database():
 
 
 
-def main():
-    arg_parser = argparse.ArgumentParser(description="Orchestrate TrackMan data to PostgreSQL pipeline.")
-    arg_parser.add_argument('--file', type=str, required = True, help = "Path to raw TrackMan CSV")
-    args = arg_parser.parse_args()
-
-    print(f"Initializing parser for: {args.file}")
-
-    parser = BaseballParser(args.file)
-    parser.load_data()
-
+def process_dataframe_and_store(df):
+    '''
+    Core pipeline logic: Accepts an already loaded/cleaned DataFrame,
+    calculates metrics for all pitchers, and upserts them into Postgres.
+    '''
+    
+    parser = BaseballParser(file_path="")
+    
+    import re
+    df.columns = [
+        re.sub(r'(?<!^)(?=[A-Z])', '_', col).lower().replace(' ', '_')
+        for col in df.columns
+    ]
+    parser.df = df
+    
     pitchers = parser.get_pitcher_names()
     if not pitchers:
-        print("No pitcher data found in file. Exiting.")
-        return
-    
-    print(f"Found {len(pitchers)} pitchers to process.")
+        print("No pitcher data found.")
+        return []
 
     setup_database()
 
     with engine.begin() as conn:
 
         for pitcher in pitchers:
-            print(f"Processing {pitcher}...")
 
             meta = parser.get_metadata(pitcher)
             if meta:
@@ -196,7 +198,22 @@ def main():
 
                 conn.execute(box_upsert, box_score.to_dict(orient='records'))
 
-    print(f"Pipeline complete! Raw data successfully aggregated and dumped into PostgreSQL")
+    return pitchers
+
+def process_file_and_store(file_path: str):
+    '''
+    CLI wrapper: Loads raw file from path and runs storage pipeline.
+    '''
+    parser = BaseballParser(file_path)
+    df = parser.load_data()
+    return process_dataframe_and_store(df)
+    
 
 if __name__ == "__main__":
-        main()
+    arg_parser = argparse.ArgumentParser(description="Orchestrate TrackMan data to PostgreSQL pipeline.")
+    arg_parser.add_argument('--file', type=str, required = True, help = "Path to raw TrackMan CSV")
+    args = arg_parser.parse_args()
+
+    print(f"Initializing parser for: {args.file}")
+    process_file_and_store(args.file)
+    print(f"Pipeline complete! Raw data successfully aggregated and dumped into PostgreSQL")

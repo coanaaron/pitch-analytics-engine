@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 // Helper specifically for the Past Games tab card headers
 const formatGameCardHeader = (game) => {
   const home = game.home_team || game.HomeTeam || '';
@@ -39,7 +41,7 @@ export default function App() {
   const fetchPastGames = useCallback(async () => {
     setIsLoadingHistory(true);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/metadata');
+      const response = await fetch(`${API_BASE_URL}/api/v1/metadata`);
       if (response.ok) {
         const data = await response.json();
         
@@ -112,7 +114,7 @@ export default function App() {
     formData.append('file', file);
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/upload', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -153,9 +155,9 @@ export default function App() {
     setError(null);
     try {
       const [metaRes, boxRes, metricsRes] = await Promise.all([
-        fetch(`http://localhost:8000/api/v1/metadata?game_i_d=${gameId}`),
-        fetch(`http://localhost:8000/api/v1/box-score?game_i_d=${gameId}`),
-        fetch(`http://localhost:8000/api/v1/pitch-metrics?game_i_d=${gameId}`),
+        fetch(`${API_BASE_URL}/api/v1/metadata?game_i_d=${gameId}`),
+        fetch(`${API_BASE_URL}/api/v1/box-score?game_i_d=${gameId}`),
+        fetch(`${API_BASE_URL}/api/v1/pitch-metrics?game_i_d=${gameId}`),
       ]);
 
       const metadata = await metaRes.json();

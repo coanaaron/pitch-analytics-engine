@@ -178,7 +178,7 @@ async def upload_trackman_csv(
     pitch_metrics_list = get_pitch_metrics(game_i_d=game_id, game_date=None, db=db)
 
     return {
-        "metadata": metadata_list[0] if metadata_list else {},
-        "box_score": box_score_list[0] if box_score_list else {},
+        "metadata": metadata_list if metadata_list else [],
+        "box_score": box_score_list if box_score_list else [],
         "pitch_metrics": pitch_metrics_list
     }

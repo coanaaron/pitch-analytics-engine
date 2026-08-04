@@ -192,7 +192,7 @@ class BaseballParser:
         if pitcher_df.empty:
             return ""
 
-        total_outs = pitcher_df["outs_on_play"].sum()
+        total_outs = pitcher_df["outs_on_play"].sum() + pitcher_df["kor_b_b"].eq("Strikeout").sum()
         ip_decimal = total_outs / 3.0
 
         r = pitcher_df["runs_scored"].sum()
@@ -262,7 +262,7 @@ class BaseballParser:
         date = filtered_df['date'].iloc[0]
         time = filtered_df['time'].iloc[0]
 
-        total_outs = filtered_df['outs_on_play'].sum()
+        total_outs = filtered_df['outs_on_play'].sum() + filtered_df["kor_b_b"].eq("Strikeout").sum()
         ip_full = total_outs // 3
         ip_partial = total_outs % 3
         ip_str = f"{ip_full}.{ip_partial}" if ip_partial > 0 else f"{ip_full}"
@@ -334,7 +334,9 @@ class BaseballParser:
             first_pitch.get('date'),
             first_pitch.get('time'),
             opponent_str,
-            first_pitch.get('stadium')
+            first_pitch.get('stadium'),
+            first_pitch.get('home_team'),
+            first_pitch.get('away_team')
         ]
 
 

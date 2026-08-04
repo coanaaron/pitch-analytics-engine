@@ -10,6 +10,8 @@ class MetaDataResponse(BaseModel):
     time: time
     opponent: Optional[str] = None
     stadium: Optional[str] = None
+    home_team: Optional[str] = None
+    away_team: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

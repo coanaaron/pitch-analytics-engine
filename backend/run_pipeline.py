@@ -19,6 +19,8 @@ def setup_database():
                 time TIME,
                 opponent TEXT,
                 stadium TEXT,
+                home_team TEXT,
+                away_team TEXT,
                 PRIMARY KEY (game_i_d, pitcher) 
             );
         '''))
@@ -103,15 +105,17 @@ def process_dataframe_and_store(df):
             meta = parser.get_metadata(pitcher)
             if meta:
                 upsert_query = text('''
-                    INSERT INTO metadata (game_i_d, pitcher, handedness, date, time, opponent, stadium)
-                    VALUES (:game_i_d, :pitcher, :handedness, :date, :time, :opponent, :stadium)
+                    INSERT INTO metadata (game_i_d, pitcher, handedness, date, time, opponent, stadium, home_team, away_team)
+                    VALUES (:game_i_d, :pitcher, :handedness, :date, :time, :opponent, :stadium, :home_team, :away_team)
                     ON CONFLICT (game_i_d, pitcher) 
                     DO UPDATE SET 
                         handedness = EXCLUDED.handedness,
                         date = EXCLUDED.date,
                         time = EXCLUDED.time,
                         opponent = EXCLUDED.opponent,       
-                        stadium = EXCLUDED.stadium;
+                        stadium = EXCLUDED.stadium,
+                        home_team = EXCLUDED.home_team,
+                        away_team = EXCLUDED.away_team;
                 ''')
                 conn.execute(upsert_query, {
                     "game_i_d": meta[0],
@@ -120,7 +124,9 @@ def process_dataframe_and_store(df):
                     "date": str(meta[3]),
                     "time": str(meta[4]),
                     "opponent": meta[5],
-                    "stadium": meta[6]
+                    "stadium": meta[6],
+                    "home_team": meta[7],
+                    "away_team": meta[8]
                 })
 
             metrics = parser.calculate_pitch_metrics(pitcher)

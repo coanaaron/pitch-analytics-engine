@@ -7,10 +7,6 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-print("=" * 40)
-print("DEBUG DATABASE_URL VALUE:", repr(DATABASE_URL))
-print("=" * 40)
-
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL is missing")
 

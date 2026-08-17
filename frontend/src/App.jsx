@@ -188,6 +188,37 @@ export default function App() {
     }
   };
 
+  // Delete a game and its associated records from PostgreSQL
+  const deleteGame = async (e, gameId) => {
+    e.stopPropagation(); // Prevents clicking the card and loading the report
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete Game "${gameId}"? All pitch metrics, box scores, and metadata will be permanently removed.`
+    );
+    if (!confirmed) return;
+
+    try{
+      const response = await fetch(`${API_BASE_URL}/api/v1/games/${encodeURIComponent(gameId)}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to delete game');
+      }
+
+      setPastGames((prev) => prev.filter((g) => g.game_i_d != gameId));
+
+      if (reportData && meta?.game_i_d === gameId) {
+        setReportData(null);
+        setSelectedPitcher('');
+      }
+    } catch (err) {
+      console.error('Delete failed:', err);
+      alert(`Error: ${err.message}`);
+    }
+  };
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'text/csv': ['.csv'] },
@@ -529,9 +560,9 @@ export default function App() {
                 <div
                   key={game.game_i_d}
                   onClick={() => loadHistoricalGame(game.game_i_d)}
-                  className="bg-zinc-900/60 border border-zinc-800 hover:border-[#7a0016] rounded-xl p-4 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-lg space-y-3 group"
+                  className="bg-zinc-900/60 border border-zinc-800 hover:border-[#7a0016] rounded-xl p-4 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-lg space-y-3 group relative"
                 >
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     <div>
                       <span className="text-[10px] uppercase tracking-wider text-[#a81c37] font-bold">
                         📅 {game.date || 'Date N/A'}
@@ -540,9 +571,24 @@ export default function App() {
                         {formatGameCardHeader(game)}
                       </h3>
                     </div>
-                    <span className="text-[10px] bg-zinc-800 text-zinc-400 font-mono px-2 py-0.5 rounded border border-zinc-700">
-                      {game.game_i_d}
-                    </span>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] bg-zinc-800 text-zinc-400 font-mono px-2 py-0.5 rounded border border-zinc-700">
+                        {game.game_i_d}
+                      </span>
+                      
+                      {/* DELETE BUTTON */}
+                      <button
+                        type="button"
+                        title="Delete Game"
+                        onClick={(e) => deleteGame(e, game.game_i_d)}
+                        className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-950/40 rounded-md border border-transparent hover:border-red-800 transition-colors"
+                      >
+                        <svg className="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
 
                   {game.stadium && (

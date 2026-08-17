@@ -184,3 +184,50 @@ async def upload_trackman_csv(
         "box_score": box_score_list if box_score_list else [],
         "pitch_metrics": pitch_metrics_list
     }
+
+@app.delete(
+     "/api/v1/games/{game_i_d}",
+     summary="Delete Game Data",
+     tags=["Management"]
+)
+
+def delete_game(
+    game_i_d: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Deletes all records associated with a specific game_i_d across
+    all tables.
+    """
+    try:
+        db.execute(
+            text("DELETE FROM pitch_metrics WHERE game_i_d = :game_i_d"),
+            {"game_i_d": game_i_d}
+        )
+        db.execute(
+            text("DELETE FROM box_scores WHERE game_i_d = :game_i_d"),
+            {"game_i_d": game_i_d}
+        )
+        result = db.execute(
+            text("DELETE FROM metadata WHERE game_i_d = :game_i_d"),
+            {"game_i_d": game_i_d}
+        )
+
+        db.commit()
+
+        if result.rowcount == 0:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Game '{game_i_d}' not found in database."
+            )
+        
+        return {"status": "success", "message": f"Game '{game_i_d}' deleted successfully."}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete game data: {str(e)}"
+        )

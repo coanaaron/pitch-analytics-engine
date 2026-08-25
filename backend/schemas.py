@@ -22,7 +22,7 @@ class BoxScoreResponse(BaseModel):
     time: time
     ip: Optional[str] = None
     h: Optional[int] = None
-    r: Optional[int] = None
+    er: Optional[int] = None
     two_b: Optional[int] = None
     three_b: Optional[int] = None
     hr: Optional[int] = None

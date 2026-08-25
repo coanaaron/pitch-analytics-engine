@@ -61,7 +61,7 @@ def setup_database():
                 time TIME,
                 ip TEXT,
                 h INTEGER,
-                r INTEGER,
+                er INTEGER,
                 two_b INTEGER,
                 three_b INTEGER,
                 hr INTEGER,
@@ -180,10 +180,10 @@ def process_dataframe_and_store(df):
 
                 box_upsert = text('''
                     INSERT INTO box_scores (
-                        game_i_d, pitcher, date, time, ip, h, r, two_b, three_b, hr, bb, hbp, k, pitches, start_grade
+                        game_i_d, pitcher, date, time, ip, h, er, two_b, three_b, hr, bb, hbp, k, pitches, start_grade
                     )
                     VALUES (
-                        :game_i_d, :pitcher, :date, :time, :ip, :h, :r, :two_b, :three_b, :hr, :bb, :hbp, :k, :pitches, :start_grade
+                        :game_i_d, :pitcher, :date, :time, :ip, :h, :er, :two_b, :three_b, :hr, :bb, :hbp, :k, :pitches, :start_grade
                     )
                     ON CONFLICT (game_i_d, pitcher)
                     DO UPDATE SET
@@ -191,7 +191,7 @@ def process_dataframe_and_store(df):
                         time = EXCLUDED.time,
                         ip = EXCLUDED.ip,
                         h = EXCLUDED.h,
-                        r = EXCLUDED.r,
+                        er = EXCLUDED.er,
                         two_b = EXCLUDED.two_b,
                         three_b = EXCLUDED.three_b,
                         hr = EXCLUDED.hr,

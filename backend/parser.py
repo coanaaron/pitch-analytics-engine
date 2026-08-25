@@ -124,58 +124,93 @@ class BaseballParser:
 
 
 
-
-    # Work in progress
-    def calculate_earned_runs(self) -> int:
+    def calculate_earned_runs(self, pitcher_name: str) -> int:
         """
-        Implements a sequential state machine that reconstructs baseball half-innings 
-        to accurately distinguish between earned and unearned runs by evaluating 
-        actual versus expected outs on a row-by-row basis.
+        Reconstructs half-innings row-by-row to accurately calculate earned runs (ER)
+        for a specific pitcher by evaluating actual outs, reconstructed outs, 
+        and unearned baserunners.
         """
 
-        filtered_df = self.df
+        if self.df is None or self.df.empty:
+            return 0
+        
+        tb_col = 'top/_bottom' if 'top/_bottom' in self.df.columns else ('top_bottom' if 'top_bottom' in self.df.columns else 'top/bottom')
 
-        current_half_inning = None
-        actual_outs = 0
-        expected_outs = 0
         earned_runs = 0
+        half_innings = self.df.groupby(['inning', tb_col], sort=False)
 
-        for index, row in filtered_df.iterrows():
-            inning_num = row['Inning']
-            half = row['Top/Bottom']
+        for _, half_group in half_innings:
+            actual_outs = 0
+            reconstructed_outs = 0
+            # Queue of active runners on base: [{'pitcher': str, 'is_earned_eligible': bool}]
+            runners_on_base = []
 
-            this_row_half_inning = f"{inning_num}_{half}"
+            for _, row in half_group.iterrows():
+                current_pitcher = row.get('pitcher')
+                if pd.isna(current_pitcher):
+                    continue
 
-            if this_row_half_inning != current_half_inning:
-                current_half_inning = this_row_half_inning
-                actual_outs = 0
-                expected_outs = 0
-            
-            outs_this_play = int(row['OutsOnPlay'])
-
-            if row["PlayResult"] == 'Error':
-                expected_outs_this_play = outs_this_play + 1
-            else:
-                expected_outs_this_play = outs_this_play
-
-            actual_outs += outs_this_play
-            expected_outs += expected_outs_this_play
-
-            if expected_outs >= 3 and actual_outs < 3:
-                is_inning_reconstructed = True
-            else:
-                is_inning_reconstructed = False
-
-            runs_on_play = int(row['RunsScored'])
-
-            if runs_on_play > 0:
-                if is_inning_reconstructed == False:
-                    earned_runs += runs_on_play
+                outs_on_play = int(row.get('outs_on_play', 0) or 0)
+                if row.get('kor_b_b') == 'Strikeout':
+                    outs_on_play += 1
                 
+                play_result = str(row.get('play_result', '')).strip()
+                play_result_lower = play_result.lower()
+                pitch_call = str(row.get('pitch_call', '')).strip()
+                kor_bb = str(row.get('kor_b_b', '')).strip()
 
-            if actual_outs >= 3:
-                actual_outs = 0
-                expected_outs = 0
+                is_error = 'error' in play_result_lower
+                expected_outs_on_play = outs_on_play + (1 if is_error else 0)
+
+                was_inning_over_without_errors = (reconstructed_outs >= 3)
+                runs_scored = int(row.get('runs_scored', 0) or 0)
+
+                if runs_scored > 0:
+                    runs_to_attribute = runs_scored
+
+                    if play_result_lower == 'homerun':
+                        while runners_on_base and runs_to_attribute > 1:
+                            runner = runners_on_base.pop(0)
+                            if runner['pitcher'] == pitcher_name and not was_inning_over_without_errors and runner['is_earned_eligible']:
+                                earned_runs += 1
+                            runs_to_attribute -= 1
+                        
+                        if current_pitcher == pitcher_name and not was_inning_over_without_errors:
+                            earned_runs += 1
+                        runs_to_attribute = 0
+                    else:
+                        while runners_on_base and runs_to_attribute > 0:
+                            runner = runners_on_base.pop(0)
+                            if runner['pitcher'] == pitcher_name and not was_inning_over_without_errors and not is_error and runner['is_earned_eligible']:
+                                earned_runs += 1
+                            runs_to_attribute -= 1
+                        
+                        while runs_to_attribute > 0:
+                            if current_pitcher == pitcher_name and not was_inning_over_without_errors and not is_error:
+                                earned_runs += 1
+                            runs_to_attribute -= 1
+
+                is_walk = kor_bb == 'Walk'
+                is_hbp = pitch_call == 'HitByPitch'
+                is_hit = play_result in ['Single', 'Double', 'Triple']
+                is_fc = 'fielderschoice' in play_result_lower
+
+                if is_walk or is_hbp or is_hit:
+                    runners_on_base.append({'pitcher': current_pitcher, 'is_earned_eligible': True})
+                elif is_error or is_fc:
+                    runners_on_base.append({'pitcher': current_pitcher, 'is_earned_eligible': False})
+
+                if outs_on_play > 0 and runners_on_base:
+                    non_batter_outs = outs_on_play - (1 if (kor_bb == 'Strikeout' or play_result == 'Out') else 0)
+                    for _ in range(max(0, non_batter_outs)):
+                        if runners_on_base:
+                            runners_on_base.pop(0)
+
+                actual_outs += outs_on_play
+                reconstructed_outs += expected_outs_on_play
+
+                if actual_outs >= 3:
+                    break
         
         return earned_runs
 
@@ -183,7 +218,7 @@ class BaseballParser:
 
 
 
-    def start_grade_calculator(self, pitcher_df: pd.DataFrame) -> str:
+    def start_grade_calculator(self, pitcher_df: pd.DataFrame, er: int = 0) -> str:
         """
         Calculates a game start grade using the performance regression equation.
         Maps a calculated numerical score to a letter grade array scale from 0 to 12.
@@ -195,7 +230,6 @@ class BaseballParser:
         total_outs = pitcher_df["outs_on_play"].sum() + pitcher_df["kor_b_b"].eq("Strikeout").sum()
         ip_decimal = total_outs / 3.0
 
-        r = pitcher_df["runs_scored"].sum()
         k = pitcher_df["kor_b_b"].eq("Strikeout").sum()
         bb = pitcher_df["kor_b_b"].eq("Walk").sum()
         hbp = pitcher_df["pitch_call"].eq("HitByPitch").sum()
@@ -208,7 +242,7 @@ class BaseballParser:
         raw_score = (
             4.03 +
             (0.95 * ip_decimal) +
-            (-0.79 * r) +
+            (-0.79 * er) +
             (0.16 * k) +
             (-0.22 * bb) +
             (0.02 * hbp) +
@@ -275,11 +309,11 @@ class BaseballParser:
         bb = filtered_df["kor_b_b"].eq("Walk").sum()
         k = filtered_df["kor_b_b"].eq("Strikeout").sum()
         hbp = filtered_df["pitch_call"].eq("HitByPitch").sum()
-        r = filtered_df["runs_scored"].sum()
+        er = self.calculate_earned_runs(pitcher_name)
 
         pitches = len(filtered_df)
 
-        start_grade = self.start_grade_calculator(filtered_df) if is_starter else None
+        start_grade = self.start_grade_calculator(filtered_df, er) if is_starter else None
 
         box_score_df = pd.DataFrame([{
             "game_i_d": game_i_d,
@@ -288,7 +322,7 @@ class BaseballParser:
             "time": time,
             "ip": ip_str,
             "h": h,
-            "r": r,
+            "er": er,
             "2b": two_b,
             "3b": three_b,
             "hr": hr,
@@ -341,14 +375,4 @@ class BaseballParser:
 
 
 
-# splits_summary = filtered_df.groupby(['TaggedPitchType', 'BatterSide']).agg(
-#     Pitch_Count = ('RelSpeed', 'count')
-# )
 
-# print(splits_summary)
-
-
-# filtered_df['InZone'] = (
-#     (filtered_df['PlateLocHeight'] >= 1.5) & (filtered_df['PlateLocHeight'] <= 3.5) &
-#     (filtered_df['PlateLocSide'] >= -0.708) & (filtered_df['PlateLocSide'] <= 0.708) 
-# )

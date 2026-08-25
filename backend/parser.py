@@ -201,7 +201,7 @@ class BaseballParser:
                     runners_on_base.append({'pitcher': current_pitcher, 'is_earned_eligible': False})
 
                 if outs_on_play > 0 and runners_on_base:
-                    non_batter_outs = outs_on_play - (1 if (kor_bb == 'Strikeout' or play_result == 'Out') else 0)
+                    non_batter_outs = outs_on_play - (1 if (kor_bb == 'Strikeout' or play_result == 'Out' or play_result == 'Sacrifice') else 0)
                     for _ in range(max(0, non_batter_outs)):
                         if runners_on_base:
                             runners_on_base.pop(0)

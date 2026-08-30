@@ -154,17 +154,19 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     try {
-      const [metaRes, boxRes, metricsRes] = await Promise.all([
+      const [metaRes, boxRes, metricsRes, splitsRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/v1/metadata?game_i_d=${gameId}`),
         fetch(`${API_BASE_URL}/api/v1/box-score?game_i_d=${gameId}`),
         fetch(`${API_BASE_URL}/api/v1/pitch-metrics?game_i_d=${gameId}`),
+        fetch(`${API_BASE_URL}/api/v1/pitch-splits?game_i_d=${gameId}`),
       ]);
 
       const metadata = await metaRes.json();
       const box_score = await boxRes.json();
       const pitch_metrics = await metricsRes.json();
+      const pitch_splits = await splitsRes.json();
 
-      const combinedData = { metadata, box_score, pitch_metrics };
+      const combinedData = { metadata, box_score, pitch_metrics, pitch_splits };
       setReportData(combinedData);
 
       const pitchers = Array.from(
@@ -259,6 +261,15 @@ export default function App() {
   const filteredMetrics = useMemo(() => {
     if (!Array.isArray(reportData?.pitch_metrics)) return [];
     return reportData.pitch_metrics.filter((p) => p.pitcher === selectedPitcher);
+  }, [reportData, selectedPitcher]);
+
+  const filteredSplits = useMemo(() => {
+    if (!Array.isArray(reportData?.pitch_splits)) return { lhb: [], rhb: [] };
+    const pitcherSplits = reportData.pitch_splits.filter((s) => s.pitcher === selectedPitcher);
+    return {
+      lhb: pitcherSplits.filter((s) => s.batter_side === 'Left'),
+      rhb: pitcherSplits.filter((s) => s.batter_side === 'Right')
+    };
   }, [reportData, selectedPitcher]);
 
   return (
@@ -492,6 +503,92 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* USAGE SPLITS - 2/3 ROW WITH PRINT COLOR ADJUST */}
+                <div className="mt-3 grid grid-cols-1 lg:grid-cols-12 gap-3 print:grid-cols-12">
+                  
+                  {/* USAGE SPLITS: Takes 2/3 of row (8 cols out of 12) */}
+                  <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-3 print:col-span-8 print:grid-cols-2">
+                    
+                    {/* CARD 1: USAGE VS LHB */}
+                    <div className="border border-zinc-200 rounded-lg p-3 bg-white shadow-sm flex flex-col justify-between print:border-zinc-300">
+                      <div>
+                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-3 print:text-zinc-700">
+                          USAGE VS LHB
+                        </h3>
+                        
+                        <div className="space-y-2.5">
+                          {filteredSplits.lhb.length === 0 ? (
+                            <p className="text-[11px] text-zinc-400 italic py-4 text-center">No pitches recorded vs LHB</p>
+                          ) : (
+                            filteredSplits.lhb.map((item) => (
+                              <div key={`lhb-${item.tagged_pitch_type}`} className="flex items-center text-[11px]">
+                                {/* Left: Percentage */}
+                                <span className="w-8 text-right font-medium text-zinc-700 text-[10px] pr-2 shrink-0">
+                                  {Math.round(item.usage_pct)}%
+                                </span>
+                                
+                                {/* Middle: Gray track + Single Color bar */}
+                                <div className="flex-1 bg-zinc-100 h-3.5 rounded-sm overflow-hidden flex items-center print:[print-color-adjust:exact] print:bg-zinc-100">
+                                  <div 
+                                    className="bg-[#7a0016] h-full rounded-sm transition-all duration-300 print:[print-color-adjust:exact] print:bg-[#7a0016]"
+                                    style={{ width: `${Math.min(item.usage_pct, 100)}%` }} 
+                                  />
+                                </div>
+
+                                {/* Right: Pitch Name & Count */}
+                                <span className="w-24 text-left font-medium text-zinc-700 text-[10px] pl-2 shrink-0 truncate">
+                                  {item.tagged_pitch_type} ({item.pitch_count})
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* CARD 2: USAGE VS RHB */}
+                    <div className="border border-zinc-200 rounded-lg p-3 bg-white shadow-sm flex flex-col justify-between print:border-zinc-300">
+                      <div>
+                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-3 print:text-zinc-700">
+                          USAGE VS RHB
+                        </h3>
+
+                        <div className="space-y-2.5">
+                          {filteredSplits.rhb.length === 0 ? (
+                            <p className="text-[11px] text-zinc-400 italic py-4 text-center">No pitches recorded vs RHB</p>
+                          ) : (
+                            filteredSplits.rhb.map((item) => (
+                              <div key={`rhb-${item.tagged_pitch_type}`} className="flex items-center text-[11px]">
+                                {/* Left: Percentage */}
+                                <span className="w-8 text-right font-medium text-zinc-700 text-[10px] pr-2 shrink-0">
+                                  {Math.round(item.usage_pct)}%
+                                </span>
+                                
+                                {/* Middle: Gray track + Single Color bar */}
+                                <div className="flex-1 bg-zinc-100 h-3.5 rounded-sm overflow-hidden flex items-center print:[print-color-adjust:exact] print:bg-zinc-100">
+                                  <div 
+                                    className="bg-[#7a0016] h-full rounded-sm transition-all duration-300 print:[print-color-adjust:exact] print:bg-[#7a0016]"
+                                    style={{ width: `${Math.min(item.usage_pct, 100)}%` }} 
+                                  />
+                                </div>
+
+                                {/* Right: Pitch Name & Count */}
+                                <span className="w-24 text-left font-medium text-zinc-700 text-[10px] pl-2 shrink-0 truncate">
+                                  {item.tagged_pitch_type} ({item.pitch_count})
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* BLANK RIGHT 1/3 (4 cols out of 12) */}
+                  <div className="hidden lg:block lg:col-span-4 print:block print:col-span-4" />
+
+                </div>
               </div>
             )}
           </section>

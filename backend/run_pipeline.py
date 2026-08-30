@@ -74,6 +74,20 @@ def setup_database():
             );
         '''))
 
+        conn.execute(text('''
+            CREATE TABLE IF NOT EXISTS pitch_splits (
+                game_i_d TEXT,
+                pitcher TEXT,
+                date DATE,
+                time TIME,
+                batter_side TEXT,
+                tagged_pitch_type TEXT,
+                pitch_count INTEGER,
+                usage_pct REAL,
+                PRIMARY KEY (game_i_d, pitcher, batter_side, tagged_pitch_type)          
+            );
+        '''))
+
 
 
 def process_dataframe_and_store(df):
@@ -203,6 +217,28 @@ def process_dataframe_and_store(df):
                 ''')
 
                 conn.execute(box_upsert, box_score.to_dict(orient='records'))
+
+            splits = parser.calculate_pitch_splits(pitcher)
+            if not splits.empty:
+                splits.columns = splits.columns.str.lower()
+                splits['date'] = splits['date'].astype(str)
+                splits['time'] = splits['time'].astype(str)
+
+                splits_upsert = text('''
+                    INSERT INTO pitch_splits (
+                        game_i_d, pitcher, date, time, batter_side, tagged_pitch_type, pitch_count, usage_pct
+                    ) VALUES (
+                        :game_i_d, :pitcher, :date, :time, :batter_side, :tagged_pitch_type, :pitch_count, :usage_pct
+                    )
+                    ON CONFLICT (game_i_d, pitcher, batter_side, tagged_pitch_type)
+                    DO UPDATE SET
+                        date = EXCLUDED.date,
+                        time = EXCLUDED.time,
+                        pitch_count = EXCLUDED.pitch_count,
+                        usage_pct = EXCLUDED.usage_pct;
+                ''')
+
+                conn.execute(splits_upsert, splits.to_dict(orient='records'))
 
     return pitchers
 

@@ -375,4 +375,51 @@ class BaseballParser:
 
 
 
+    def calculate_pitch_splits(self, pitcher_name: str) -> pd.DataFrame:
+        """
+        Calculates pitch count and usage % grouped by batter side (LHB vs RHB).
+        """
+        if self.df is None or self.df.empty:
+            return pd.DataFrame()
+        
+        filtered_df = self.df[self.df['pitcher'] == pitcher_name]
+        if filtered_df.empty or 'batter_side' not in filtered_df.columns:
+            return pd.DataFrame()
+        
+        # Remove undefined pitch types
+        filtered_df = filtered_df[filtered_df['tagged_pitch_type'].notna() & (filtered_df['tagged_pitch_type'] != 'Undefined')]
+        if filtered_df.empty:
+            return pd.DataFrame()
+        
+        game_i_d = filtered_df['game_i_d'].iloc[0]
+        date = filtered_df['date'].iloc[0]
+        time = filtered_df['time'].iloc[0]
+
+        pitch_order = ['Fastball', 'Sinker', 'Cutter', 'Slider', 'Sweeper', 'Curveball', 'ChangeUp', 'Splitter']
+
+        records = []
+        for side in ['Left', 'Right']:
+            side_df = filtered_df[filtered_df['batter_side'] == side]
+            total_side_pitches = len(side_df)
+            if total_side_pitches == 0:
+                continue
+
+            counts = side_df['tagged_pitch_type'].value_counts()
+            ordered = [p for p in pitch_order if p in counts.index] + [p for p in counts.index if p not in pitch_order]
+
+            for p_type in ordered:
+                cnt = int(counts[p_type])
+                pct = round((cnt/total_side_pitches) * 100, 1)
+                records.append({
+                    'game_i_d': game_i_d,
+                    'pitcher': pitcher_name,
+                    'date': date,
+                    'time': time,
+                    'batter_side': side,
+                    'tagged_pitch_type': p_type,
+                    'pitch_count': cnt,
+                    'usage_pct': pct
+                })
+        
+        return pd.DataFrame(records)
 

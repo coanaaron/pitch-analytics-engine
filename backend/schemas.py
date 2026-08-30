@@ -59,3 +59,15 @@ class PitchMetricsResponse(BaseModel):
     spin_axis: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class PitchSplitResponse(BaseModel):
+    game_i_d: str
+    pitcher: str
+    date: date
+    time: time
+    batter_side: Optional[str] = None
+    tagged_pitch_type: Optional[str] = None
+    pitch_count: Optional[int] = None
+    usage_pct: Optional[float] = None
+
+    model_config = ConfigDict(from_attributes=True)

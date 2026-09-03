@@ -25,6 +25,20 @@ const formatGameCardHeader = (game) => {
   return game.opponent || `Game ID: ${game.game_i_d}`;
 };
 
+// Pitch color mapping
+const PITCH_COLORS = {
+  Fastball: '#d94f54',   // Red / Coral
+  Sinker: '#e67e22',     // Orange
+  Cutter: '#8b5cf6',     // Purple
+  Slider: '#3b82f6',     // Blue
+  Sweeper: '#06b6d4',    // Cyan
+  Curveball: '#1e3a8a',  // Dark Navy
+  ChangeUp: '#14b8a6',   // Teal
+  Splitter: '#10b981',   // Emerald Green
+};
+
+const getPitchColor = (pitchType) => PITCH_COLORS[pitchType] || '#7a0016';
+
 export default function App() {
   const [activePage, setActivePage] = useState('home');
   const [reportData, setReportData] = useState(null);
@@ -154,19 +168,21 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     try {
-      const [metaRes, boxRes, metricsRes, splitsRes] = await Promise.all([
+      const [metaRes, boxRes, metricsRes, splitsRes, movementRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/v1/metadata?game_i_d=${gameId}`),
         fetch(`${API_BASE_URL}/api/v1/box-score?game_i_d=${gameId}`),
         fetch(`${API_BASE_URL}/api/v1/pitch-metrics?game_i_d=${gameId}`),
         fetch(`${API_BASE_URL}/api/v1/pitch-splits?game_i_d=${gameId}`),
+        fetch(`${API_BASE_URL}/api/v1/pitch-movement?game_i_d=${gameId}`),
       ]);
 
       const metadata = await metaRes.json();
       const box_score = await boxRes.json();
       const pitch_metrics = await metricsRes.json();
       const pitch_splits = await splitsRes.json();
+      const pitch_movement = await movementRes.json();
 
-      const combinedData = { metadata, box_score, pitch_metrics, pitch_splits };
+      const combinedData = { metadata, box_score, pitch_metrics, pitch_splits, pitch_movement };
       setReportData(combinedData);
 
       const pitchers = Array.from(
@@ -270,6 +286,11 @@ export default function App() {
       lhb: pitcherSplits.filter((s) => s.batter_side === 'Left'),
       rhb: pitcherSplits.filter((s) => s.batter_side === 'Right')
     };
+  }, [reportData, selectedPitcher]);
+
+  const filteredMovement = useMemo(() => {
+    if (!Array.isArray(reportData?.pitch_movement)) return [];
+    return reportData.pitch_movement.filter((p) => p.pitcher === selectedPitcher);
   }, [reportData, selectedPitcher]);
 
   return (
@@ -527,11 +548,14 @@ export default function App() {
                                   {Math.round(item.usage_pct)}%
                                 </span>
                                 
-                                {/* Middle: Gray track + Single Color bar */}
+                                {/* Middle: Gray track + Dynamic Pitch Color bar */}
                                 <div className="flex-1 bg-zinc-100 h-3.5 rounded-sm overflow-hidden flex items-center print:[print-color-adjust:exact] print:bg-zinc-100">
                                   <div 
-                                    className="bg-[#7a0016] h-full rounded-sm transition-all duration-300 print:[print-color-adjust:exact] print:bg-[#7a0016]"
-                                    style={{ width: `${Math.min(item.usage_pct, 100)}%` }} 
+                                    className="h-full rounded-sm transition-all duration-300 print:[print-color-adjust:exact]"
+                                    style={{ 
+                                      width: `${Math.min(item.usage_pct, 100)}%`,
+                                      backgroundColor: getPitchColor(item.tagged_pitch_type) 
+                                    }} 
                                   />
                                 </div>
 
@@ -564,13 +588,16 @@ export default function App() {
                                   {Math.round(item.usage_pct)}%
                                 </span>
                                 
-                                {/* Middle: Gray track + Single Color bar */}
-                                <div className="flex-1 bg-zinc-100 h-3.5 rounded-sm overflow-hidden flex items-center print:[print-color-adjust:exact] print:bg-zinc-100">
-                                  <div 
-                                    className="bg-[#7a0016] h-full rounded-sm transition-all duration-300 print:[print-color-adjust:exact] print:bg-[#7a0016]"
-                                    style={{ width: `${Math.min(item.usage_pct, 100)}%` }} 
-                                  />
-                                </div>
+                                {/* Middle: Gray track + Dynamic Pitch Color bar */}
+                              <div className="flex-1 bg-zinc-100 h-3.5 rounded-sm overflow-hidden flex items-center print:[print-color-adjust:exact] print:bg-zinc-100">
+                                <div 
+                                  className="h-full rounded-sm transition-all duration-300 print:[print-color-adjust:exact]"
+                                  style={{ 
+                                    width: `${Math.min(item.usage_pct, 100)}%`,
+                                    backgroundColor: getPitchColor(item.tagged_pitch_type) 
+                                  }} 
+                                />
+                              </div>
 
                                 {/* Right: Pitch Name & Count */}
                                 <span className="w-24 text-left font-medium text-zinc-700 text-[10px] pl-2 shrink-0 truncate">
@@ -585,8 +612,80 @@ export default function App() {
 
                   </div>
 
-                  {/* BLANK RIGHT 1/3 (4 cols out of 12) */}
-                  <div className="hidden lg:block lg:col-span-4 print:block print:col-span-4" />
+                  {/* RIGHT 1/3: MOVEMENT PROFILE (PITCHER POV) */}
+                  <div className="border border-zinc-200 rounded-lg p-3 bg-white shadow-sm flex flex-col justify-between lg:col-span-4 print:col-span-4 print:border-zinc-300">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider print:text-zinc-700">
+                        MOVEMENT PROFILE (PITCHER POV)
+                      </h3>
+                    </div>
+
+                    <div className="w-full flex justify-center items-center py-1">
+                      <svg 
+                        viewBox="-35 -30 70 66" 
+                        className="w-full max-h-[220px] overflow-visible select-none text-[2.2px] font-sans font-medium"
+                      >
+                        {/* Background Grid Lines */}
+                        {[-20, -10, 10, 20].map((x) => (
+                          <line key={`gx-${x}`} x1={x} y1={-25} x2={x} y2={25} stroke="#e4e4e7" strokeWidth="0.35" />
+                        ))}
+                        {[20, 10, 0, -10, -20].map((y) => (
+                          <line key={`gy-${y}`} x1={-25} y1={-y} x2={25} y2={-y} stroke="#e4e4e7" strokeWidth="0.35" />
+                        ))}
+
+                        {/* Centered Major Crosshairs (0,0) */}
+                        <line x1={-25} y1={0} x2={25} y2={0} stroke="#3f3f46" strokeWidth="0.55" />
+                        <line x1={0} y1={-25} x2={0} y2={25} stroke="#3f3f46" strokeWidth="0.55" />
+
+                        {/* Y-Axis (IVB) Labels */}
+                        {[20, 10, 0, -10, -20].map((val) => (
+                          <g key={`y-${val}`}>
+                            <line x1={-26} y1={-val} x2={-25} y2={-val} stroke="#a1a1aa" strokeWidth="0.3" />
+                            <text x="-27.5" y={-val + 0.8} fill="#71717a" textAnchor="end">{val}</text>
+                          </g>
+                        ))}
+
+                        {/* X-Axis (HorzBreak) Number Labels */}
+                        {[-20, -10, 0, 10, 20].map((val) => (
+                          <g key={`x-${val}`}>
+                            <line x1={val} y1={25} x2={val} y2={26} stroke="#a1a1aa" strokeWidth="0.3" />
+                            <text x={val} y={29} fill="#71717a" textAnchor="middle">{val}</text>
+                          </g>
+                        ))}
+
+                        {/* Non-overlapping Axis Titles */}
+                        <text x="-32" y="0" fill="#71717a" textAnchor="middle" transform="rotate(-90 -32,0)" className="text-[2.2px] font-semibold">
+                          IVB (in)
+                        </text>
+                        <text x="0" y="33.5" fill="#71717a" textAnchor="middle" className="text-[2.2px] font-semibold">
+                          HorzBreak (in)
+                        </text>
+
+                        {/* Scatter Points Color-Matched to Pitch Types */}
+                        {filteredMovement.map((pitch, idx) => {
+                          const cx = pitch.horz_break;
+                          const cy = -pitch.induced_vert_break;
+                          const color = getPitchColor(pitch.tagged_pitch_type);
+
+                          return (
+                            <circle
+                              key={idx}
+                              cx={cx}
+                              cy={cy}
+                              r="1.1"
+                              fill={color}
+                              fillOpacity="0.8"
+                              stroke="#ffffff"
+                              strokeWidth="0.25"
+                              className="print:[print-color-adjust:exact]"
+                            >
+                              <title>{`${pitch.tagged_pitch_type}: HB ${pitch.horz_break}", IVB ${pitch.induced_vert_break}"`}</title>
+                            </circle>
+                          );
+                        })}
+                      </svg>
+                    </div>
+                  </div>
 
                 </div>
               </div>

@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 
 from database import get_db
-from schemas import MetaDataResponse, BoxScoreResponse, PitchMetricsResponse, PitchSplitResponse
+from schemas import MetaDataResponse, BoxScoreResponse, PitchMetricsResponse, PitchSplitResponse, PitchMovementResponse
 from run_pipeline import process_dataframe_and_store
 
 app = FastAPI(
@@ -40,7 +40,7 @@ app.add_middleware(
 
 def get_metadata(
     game_i_d: Optional[str] = Query(None, description="Filter by Game ID"),
-    game_date: Optional[date] = Query(None, description="Filter by game date (YYYY-MM-DD)"),
+    game_date: Optional[date] = Query(None, description="Filter by game date"),
     db: Session = Depends(get_db)
 ):
     """
@@ -75,7 +75,7 @@ def get_metadata(
 
 def get_box_score(
     game_i_d: Optional[str] = Query(None, description="Filter by Game ID"),
-    game_date: Optional[date] = Query(None, description="Game date"),
+    game_date: Optional[date] = Query(None, description="Filter by Game date"),
     db: Session = Depends(get_db)
 ):
     """
@@ -113,7 +113,7 @@ def get_box_score(
 
 def get_pitch_metrics(
     game_i_d: Optional[str] = Query(None, description="Filter by Game ID"),
-    game_date: Optional[date] = Query(None, description="Game date"),
+    game_date: Optional[date] = Query(None, description="Filter by Game date"),
     db: Session = Depends(get_db)
 ):
     """
@@ -147,7 +147,7 @@ def get_pitch_metrics(
 
 def get_pitch_splits(
     game_i_d: Optional[str] = Query(None, description="Filter by Game ID"),
-    game_date: Optional[date] = Query(None, description="Game date"),
+    game_date: Optional[date] = Query(None, description="Filter by Game date"),
     db: Session = Depends(get_db)
 ):
     '''
@@ -170,6 +170,39 @@ def get_pitch_splits(
     df["date"] = df["date"].astype(str)
     df["time"] = df["time"].astype(str)
 
+    return df.to_dict(orient="records")
+
+
+@app.get(
+    "/api/v1/pitch-movement",
+    response_model=List[PitchMovementResponse],
+    summary="Get Pitch Movement Trajectories",
+    tags=["Analytics"]
+)
+def get_pitch_movement(
+    game_i_d: Optional[str] = Query(None, description="Filter by Game ID"),
+    game_date: Optional[date] = Query(None, description="Filter by game date (YYYY-MM-DD)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieves pitch movement points for all pitchers in a game.
+    Optionally filter by a specific date or game ID.
+    """
+    query = "SELECT * FROM pitch_movement WHERE 1=1"
+    params = {}
+
+    if game_i_d:
+        query += " AND game_i_d = :game_i_d"
+        params["game_i_d"] = game_i_d
+    elif game_date:
+        query += " AND date = :game_date"
+        params["game_date"] = game_date
+
+    df = pd.read_sql(text(query), con=db.connection(), params=params)
+    if df.empty:
+        return []
+    
+    df["date"] = df["date"].astype(str)
     return df.to_dict(orient="records")
 
 
@@ -207,12 +240,14 @@ async def upload_trackman_csv(
     box_score_list = get_box_score(game_i_d=game_id, game_date=None, db=db)
     pitch_metrics_list = get_pitch_metrics(game_i_d=game_id, game_date=None, db=db)
     pitch_splits_list = get_pitch_splits(game_i_d=game_id, game_date=None, db=db)
+    pitch_movement_list = get_pitch_movement(game_i_d=game_id, game_date=None, db=db)
 
     return {
         "metadata": metadata_list if metadata_list else [],
         "box_score": box_score_list if box_score_list else [],
         "pitch_metrics": pitch_metrics_list,
-        "pitch_splits": pitch_splits_list
+        "pitch_splits": pitch_splits_list,
+        "pitch_movement": pitch_movement_list
     }
 
 @app.delete(
@@ -236,6 +271,14 @@ def delete_game(
         )
         db.execute(
             text("DELETE FROM box_scores WHERE game_i_d = :game_i_d"),
+            {"game_i_d": game_i_d}
+        )
+        db.execute(
+            text("DELETE FROM pitch_splits WHERE game_i_d = :game_i_d"),
+            {"game_i_d": game_i_d}
+        )
+        db.execute(
+            text("DELETE FROM pitch_movement WHERE game_i_d = :game_i_d"),
             {"game_i_d": game_i_d}
         )
         result = db.execute(

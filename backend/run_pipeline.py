@@ -88,6 +88,19 @@ def setup_database():
             );
         '''))
 
+        conn.execute(text('''
+            CREATE TABLE IF NOT EXISTS pitch_movement (
+                game_i_d TEXT,
+                pitcher TEXT,
+                date DATE,
+                pitch_id INTEGER,
+                tagged_pitch_type TEXT,
+                horz_break REAL,
+                induced_vert_break REAL,
+                PRIMARY KEY (game_i_d, pitcher, pitch_id)
+            );
+        '''))
+
 
 
 def process_dataframe_and_store(df):
@@ -239,6 +252,26 @@ def process_dataframe_and_store(df):
                 ''')
 
                 conn.execute(splits_upsert, splits.to_dict(orient='records'))
+
+            movement = parser.get_pitch_movement_data(pitcher)
+            if not movement.empty:
+                movement.columns = movement.columns.str.lower()
+                movement['date'] = movement['date'].astype(str)
+
+                movement_upsert = text('''
+                    INSERT INTO pitch_movement (
+                        game_i_d, pitcher, date, pitch_id, tagged_pitch_type, horz_break, induced_vert_break
+                    ) VALUES (
+                        :game_i_d, :pitcher, :date, :pitch_id, :tagged_pitch_type, :horz_break, :induced_vert_break
+                    )
+                    ON CONFLICT (game_i_d, pitcher, pitch_id)
+                    DO UPDATE SET
+                        date = EXCLUDED.date,
+                        tagged_pitch_type = EXCLUDED.tagged_pitch_type,
+                        horz_break = EXCLUDED.horz_break,
+                        induced_vert_break = EXCLUDED.induced_vert_break;
+                ''')
+                conn.execute(movement_upsert, movement.to_dict(orient='records'))
 
     return pitchers
 

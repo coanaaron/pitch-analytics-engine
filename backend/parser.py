@@ -422,4 +422,48 @@ class BaseballParser:
                 })
         
         return pd.DataFrame(records)
+    
+    
+    def get_pitch_movement_data(self, pitcher_name: str) -> pd.DataFrame:
+        """
+        Extracts pitch-by-pitch horizontal break and induced vertical break
+        for the pitcher movement profile plot.
+        """
+        if self.df is None or self.df.empty:
+            return pd.DataFrame()
+
+        filtered_df = self.df[self.df['pitcher'] == pitcher_name].copy()
+        if filtered_df.empty:
+            return pd.DataFrame()
+
+        hb_col = 'horz_break' if 'horz_break' in filtered_df.columns else 'horizontal_break'
+        ivb_col = 'induced_vert_break' if 'induced_vert_break' in filtered_df.columns else 'induced_vertical_break'
+
+        if hb_col not in filtered_df.columns or ivb_col not in filtered_df.columns:
+            return pd.DataFrame()
+
+        valid_mask = (
+            filtered_df[hb_col].notna() &
+            filtered_df[ivb_col].notna() &
+            filtered_df['tagged_pitch_type'].notna() &
+            (filtered_df['tagged_pitch_type'] != 'Undefined')
+        )
+        points_df = filtered_df[valid_mask].copy()
+        if points_df.empty:
+            return pd.DataFrame()
+
+        game_i_d = str(points_df['game_i_d'].iloc[0])
+        pitch_col = 'pitch_no' if 'pitch_no' in points_df.columns else 'pitch_i_d'
+
+        movement_df = pd.DataFrame({
+            'game_i_d': game_i_d,
+            'pitcher': pitcher_name,
+            'date': points_df['date'].iloc[0],
+            'pitch_id': points_df[pitch_col].astype(int) if pitch_col in points_df.columns else points_df.index.astype(int),
+            'tagged_pitch_type': points_df['tagged_pitch_type'],
+            'horz_break': points_df[hb_col].round(2),
+            'induced_vert_break': points_df[ivb_col].round(2)
+        })
+
+        return movement_df
 

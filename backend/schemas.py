@@ -71,3 +71,14 @@ class PitchSplitResponse(BaseModel):
     usage_pct: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class PitchMovementResponse(BaseModel):
+    game_i_d: str
+    pitcher: str
+    date: date
+    pitch_id: int
+    tagged_pitch_type: str
+    horz_break: float
+    induced_vert_break: float
+
+    model_config = ConfigDict(from_attributes=True)

@@ -77,8 +77,11 @@ class PitchMovementResponse(BaseModel):
     pitcher: str
     date: date
     pitch_id: int
+    batter_side: Optional[str] = None
     tagged_pitch_type: str
     horz_break: float
     induced_vert_break: float
+    plate_loc_side: Optional[float] = None
+    plate_loc_height: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)

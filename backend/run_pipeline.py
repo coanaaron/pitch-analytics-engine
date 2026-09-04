@@ -94,9 +94,12 @@ def setup_database():
                 pitcher TEXT,
                 date DATE,
                 pitch_id INTEGER,
+                batter_side TEXT,
                 tagged_pitch_type TEXT,
                 horz_break REAL,
                 induced_vert_break REAL,
+                plate_loc_side REAL,
+                plate_loc_height REAL,
                 PRIMARY KEY (game_i_d, pitcher, pitch_id)
             );
         '''))
@@ -260,16 +263,21 @@ def process_dataframe_and_store(df):
 
                 movement_upsert = text('''
                     INSERT INTO pitch_movement (
-                        game_i_d, pitcher, date, pitch_id, tagged_pitch_type, horz_break, induced_vert_break
+                        game_i_d, pitcher, date, pitch_id, batter_side, tagged_pitch_type,
+                        horz_break, induced_vert_break, plate_loc_side, plate_loc_height
                     ) VALUES (
-                        :game_i_d, :pitcher, :date, :pitch_id, :tagged_pitch_type, :horz_break, :induced_vert_break
+                        :game_i_d, :pitcher, :date, :pitch_id, :batter_side, :tagged_pitch_type,
+                        :horz_break, :induced_vert_break, :plate_loc_side, :plate_loc_height
                     )
                     ON CONFLICT (game_i_d, pitcher, pitch_id)
                     DO UPDATE SET
                         date = EXCLUDED.date,
+                        batter_side = EXCLUDED.batter_side,
                         tagged_pitch_type = EXCLUDED.tagged_pitch_type,
                         horz_break = EXCLUDED.horz_break,
-                        induced_vert_break = EXCLUDED.induced_vert_break;
+                        induced_vert_break = EXCLUDED.induced_vert_break,
+                        plate_loc_side = EXCLUDED.plate_loc_side,
+                        plate_loc_height = EXCLUDED.plate_loc_height;
                 ''')
                 conn.execute(movement_upsert, movement.to_dict(orient='records'))
 

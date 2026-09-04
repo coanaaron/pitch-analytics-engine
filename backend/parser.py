@@ -426,8 +426,8 @@ class BaseballParser:
     
     def get_pitch_movement_data(self, pitcher_name: str) -> pd.DataFrame:
         """
-        Extracts pitch-by-pitch horizontal break and induced vertical break
-        for the pitcher movement profile plot.
+        Extracts pitch-by-pitch break and strike zone plate location coordinates
+        for pitch movement and location scatter plots.
         """
         if self.df is None or self.df.empty:
             return pd.DataFrame()
@@ -438,6 +438,8 @@ class BaseballParser:
 
         hb_col = 'horz_break' if 'horz_break' in filtered_df.columns else 'horizontal_break'
         ivb_col = 'induced_vert_break' if 'induced_vert_break' in filtered_df.columns else 'induced_vertical_break'
+        pls_col = 'plate_loc_side' if 'plate_loc_side' in filtered_df.columns else 'platelocside'
+        plh_col = 'plate_loc_height' if 'plate_loc_height' in filtered_df.columns else 'platelocheight'
 
         if hb_col not in filtered_df.columns or ivb_col not in filtered_df.columns:
             return pd.DataFrame()
@@ -460,9 +462,12 @@ class BaseballParser:
             'pitcher': pitcher_name,
             'date': points_df['date'].iloc[0],
             'pitch_id': points_df[pitch_col].astype(int) if pitch_col in points_df.columns else points_df.index.astype(int),
+            'batter_side': points_df['batter_side'] if 'batter_side' in points_df.columns else 'Right',
             'tagged_pitch_type': points_df['tagged_pitch_type'],
             'horz_break': points_df[hb_col].round(2),
-            'induced_vert_break': points_df[ivb_col].round(2)
+            'induced_vert_break': points_df[ivb_col].round(2),
+            'plate_loc_side': points_df[pls_col].round(2) if pls_col in points_df.columns else None,
+            'plate_loc_height': points_df[plh_col].round(2) if plh_col in points_df.columns else None
         })
 
         return movement_df

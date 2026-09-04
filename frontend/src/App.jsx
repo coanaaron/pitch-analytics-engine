@@ -39,6 +39,84 @@ const PITCH_COLORS = {
 
 const getPitchColor = (pitchType) => PITCH_COLORS[pitchType] || '#7a0016';
 
+function StrikeZonePlot({ title, pitches, getPitchColor }) {
+  // SVG coordinate system: X from -2.0 to +2.0 ft, Y from 0.0 to 5.0 ft
+  // SVG coordinates: cx = pitch.plate_loc_side * 10
+  // SVG Y goes downward, so cy = (4.5 - pitch.plate_loc_height) * 10
+  const validPitches = pitches.filter(
+    (p) => p.plate_loc_side !== null && p.plate_loc_height !== null
+  );
+
+  return (
+    <div className="border border-zinc-200 rounded-lg p-3 bg-white shadow-sm flex flex-col justify-between print:border-zinc-300">
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider print:text-zinc-700">
+          {title}
+        </h3>
+        <span className="text-[9px] font-semibold text-zinc-400">
+          {validPitches.length} Pitches
+        </span>
+      </div>
+
+      <div className="w-full flex justify-center items-center py-1">
+        <svg
+          viewBox="-22 -2 44 48"
+          className="w-full max-h-[220px] overflow-visible select-none text-[2.2px] font-sans font-medium"
+        >
+          {/* Home Plate Outline (at bottom: Y ~ 0.5 ft -> SVG Y = 40) */}
+          <polygon
+            points="-7.1,40 7.1,40 7.1,42 0,44 -7.1,42"
+            fill="#f4f4f5"
+            stroke="#d4d4d8"
+            strokeWidth="0.4"
+          />
+
+          {/* Outer Strike Zone Rectangle (17" wide = +/- 0.708 ft; 1.5 to 3.5 ft high) */}
+          {/* SVG Y: 3.5ft -> 10, 1.5ft -> 30. Width = 14.16, Height = 20 */}
+          <rect
+            x="-7.08"
+            y="10"
+            width="14.16"
+            height="20"
+            fill="none"
+            stroke="#27272a"
+            strokeWidth="0.8"
+          />
+
+          {/* 3x3 Inner Strike Zone Grid Lines */}
+          <line x1="-2.36" y1="10" x2="-2.36" y2="30" stroke="#d4d4d8" strokeWidth="0.35" strokeDasharray="1,1" />
+          <line x1="2.36" y1="10" x2="2.36" y2="30" stroke="#d4d4d8" strokeWidth="0.35" strokeDasharray="1,1" />
+          <line x1="-7.08" y1="16.66" x2="7.08" y2="16.66" stroke="#d4d4d8" strokeWidth="0.35" strokeDasharray="1,1" />
+          <line x1="-7.08" y1="23.33" x2="7.08" y2="23.33" stroke="#d4d4d8" strokeWidth="0.35" strokeDasharray="1,1" />
+
+          {/* Pitches */}
+          {validPitches.map((pitch, idx) => {
+            const cx = pitch.plate_loc_side * 10;
+            const cy = (4.5 - pitch.plate_loc_height) * 10;
+            const color = getPitchColor(pitch.tagged_pitch_type);
+
+            return (
+              <circle
+                key={idx}
+                cx={cx}
+                cy={cy}
+                r="1.15"
+                fill={color}
+                fillOpacity="0.85"
+                stroke="#ffffff"
+                strokeWidth="0.25"
+                className="print:[print-color-adjust:exact]"
+              >
+                <title>{`${pitch.tagged_pitch_type}: (${pitch.plate_loc_side}', ${pitch.plate_loc_height}')`}</title>
+              </circle>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [activePage, setActivePage] = useState('home');
   const [reportData, setReportData] = useState(null);
@@ -292,6 +370,14 @@ export default function App() {
     if (!Array.isArray(reportData?.pitch_movement)) return [];
     return reportData.pitch_movement.filter((p) => p.pitcher === selectedPitcher);
   }, [reportData, selectedPitcher]);
+
+  const locationSplits = useMemo(() => {
+    return {
+      all: filteredMovement,
+      lhb: filteredMovement.filter((p) => p.batter_side === 'Left'),
+      rhb: filteredMovement.filter((p) => p.batter_side === 'Right'),
+    };
+  }, [filteredMovement]);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 print:p-0 print:bg-white print:text-black">
@@ -687,6 +773,24 @@ export default function App() {
                     </div>
                   </div>
 
+                </div>
+                {/* ROW 3: PITCH LOCATIONS (ALL, VS LHB, VS RHB) */}
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 print:grid-cols-3">
+                  <StrikeZonePlot
+                    title="PITCH LOCATIONS (ALL)"
+                    pitches={locationSplits.all}
+                    getPitchColor={getPitchColor}
+                  />
+                  <StrikeZonePlot
+                    title="LOCATIONS VS LHB"
+                    pitches={locationSplits.lhb}
+                    getPitchColor={getPitchColor}
+                  />
+                  <StrikeZonePlot
+                    title="LOCATIONS VS RHB"
+                    pitches={locationSplits.rhb}
+                    getPitchColor={getPitchColor}
+                  />
                 </div>
               </div>
             )}

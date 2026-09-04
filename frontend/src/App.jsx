@@ -40,9 +40,6 @@ const PITCH_COLORS = {
 const getPitchColor = (pitchType) => PITCH_COLORS[pitchType] || '#7a0016';
 
 function StrikeZonePlot({ title, pitches, getPitchColor }) {
-  // SVG coordinate system: X from -2.0 to +2.0 ft, Y from 0.0 to 5.0 ft
-  // SVG coordinates: cx = pitch.plate_loc_side * 10
-  // SVG Y goes downward, so cy = (4.5 - pitch.plate_loc_height) * 10
   const validPitches = pitches.filter(
     (p) => p.plate_loc_side !== null && p.plate_loc_height !== null
   );
@@ -58,41 +55,51 @@ function StrikeZonePlot({ title, pitches, getPitchColor }) {
         </span>
       </div>
 
-      <div className="w-full flex justify-center items-center py-1">
+      <div className="w-full flex-1 flex justify-center items-center py-1">
         <svg
-          viewBox="-22 -2 44 48"
-          className="w-full max-h-[220px] overflow-visible select-none text-[2.2px] font-sans font-medium"
+          viewBox="-25 -5 50 54"
+          className="w-full h-full max-h-[235px] overflow-visible select-none text-[2.2px] font-sans font-medium"
         >
-          {/* Home Plate Outline (at bottom: Y ~ 0.5 ft -> SVG Y = 40) */}
+          {/* Home Plate Outline */}
           <polygon
-            points="-7.1,40 7.1,40 7.1,42 0,44 -7.1,42"
-            fill="#f4f4f5"
+            points="-7.1,38.5 7.1,38.5 7.1,40.5 0,42.5 -7.1,40.5"
+            fill="#ffffff"
             stroke="#d4d4d8"
-            strokeWidth="0.4"
+            strokeWidth="0.5"
           />
 
-          {/* Outer Strike Zone Rectangle (17" wide = +/- 0.708 ft; 1.5 to 3.5 ft high) */}
-          {/* SVG Y: 3.5ft -> 10, 1.5ft -> 30. Width = 14.16, Height = 20 */}
+          {/* Outer Strike Zone Rectangle */}
           <rect
             x="-7.08"
-            y="10"
+            y="9.5"
             width="14.16"
             height="20"
             fill="none"
-            stroke="#27272a"
-            strokeWidth="0.8"
+            stroke="#18181b"
+            strokeWidth="0.9"
           />
 
           {/* 3x3 Inner Strike Zone Grid Lines */}
-          <line x1="-2.36" y1="10" x2="-2.36" y2="30" stroke="#d4d4d8" strokeWidth="0.35" strokeDasharray="1,1" />
-          <line x1="2.36" y1="10" x2="2.36" y2="30" stroke="#d4d4d8" strokeWidth="0.35" strokeDasharray="1,1" />
-          <line x1="-7.08" y1="16.66" x2="7.08" y2="16.66" stroke="#d4d4d8" strokeWidth="0.35" strokeDasharray="1,1" />
-          <line x1="-7.08" y1="23.33" x2="7.08" y2="23.33" stroke="#d4d4d8" strokeWidth="0.35" strokeDasharray="1,1" />
+          <line x1="-2.36" y1="9.5" x2="-2.36" y2="29.5" stroke="#d4d4d8" strokeWidth="0.4" strokeDasharray="1,1" />
+          <line x1="2.36" y1="9.5" x2="2.36" y2="29.5" stroke="#d4d4d8" strokeWidth="0.4" strokeDasharray="1,1" />
+          <line x1="-7.08" y1="16.16" x2="7.08" y2="16.16" stroke="#d4d4d8" strokeWidth="0.4" strokeDasharray="1,1" />
+          <line x1="-7.08" y1="22.83" x2="7.08" y2="22.83" stroke="#d4d4d8" strokeWidth="0.4" strokeDasharray="1,1" />
 
-          {/* Pitches */}
+          {/* Pitch Dots - Free across the full card, clamped strictly to outer card edge */}
           {validPitches.map((pitch, idx) => {
-            const cx = pitch.plate_loc_side * 10;
-            const cy = (4.5 - pitch.plate_loc_height) * 10;
+            const rawCx = pitch.plate_loc_side * 10;
+            const rawCy = (4.4 - pitch.plate_loc_height) * 10;
+
+            // Clamped to the absolute perimeter of the entire card's SVG area
+            const minX = -23.5;
+            const maxX = 23.5;
+            const minY = -3.5;
+            const maxY = 47.0;
+
+            const cx = Math.max(minX, Math.min(maxX, rawCx));
+            const cy = Math.max(minY, Math.min(maxY, rawCy));
+
+            const isClamped = cx !== rawCx || cy !== rawCy;
             const color = getPitchColor(pitch.tagged_pitch_type);
 
             return (
@@ -100,14 +107,14 @@ function StrikeZonePlot({ title, pitches, getPitchColor }) {
                 key={idx}
                 cx={cx}
                 cy={cy}
-                r="1.15"
+                r="1.2"
                 fill={color}
-                fillOpacity="0.85"
-                stroke="#ffffff"
-                strokeWidth="0.25"
+                fillOpacity={isClamped ? 0.45 : 0.85}
+                stroke={isClamped ? '#f59e0b' : '#ffffff'}
+                strokeWidth={isClamped ? 0.35 : 0.25}
                 className="print:[print-color-adjust:exact]"
               >
-                <title>{`${pitch.tagged_pitch_type}: (${pitch.plate_loc_side}', ${pitch.plate_loc_height}')`}</title>
+                <title>{`${pitch.tagged_pitch_type}: (${pitch.plate_loc_side}', ${pitch.plate_loc_height}')${isClamped ? ' [Out of Bounds - Clamped]' : ''}`}</title>
               </circle>
             );
           })}

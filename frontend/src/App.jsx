@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -386,8 +386,89 @@ export default function App() {
     };
   }, [filteredMovement]);
 
+  const [scoutingNotes, setScoutingNotes] = useState('');
+
+  // Auto-fit: scale the report sheet so it always fills exactly one printed
+  // page, whether it's naturally too tall (shrink to fit) or too short
+  // (grow to fill). Runs right before the browser opens the print dialog.
+  //
+  // NOTE: this must match the @page rule below (letter, 0.35in/0.35in/0.3in/0.35in).
+  // We deliberately do NOT measure printFrameRef's live height in the DOM here —
+  // at the instant 'beforeprint' fires, browsers don't consistently guarantee the
+  // print stylesheet (and its fixed page-frame height) has been applied yet, so
+  // that measurement can come back as the content's own (unconstrained) height,
+  // which under-scales the content and lets the real print overflow get clipped
+  // by the frame's overflow:hidden instead of being shrunk to fit.
+  const PAGE_CONTENT_HEIGHT_IN = 11 - 0.35 - 0.3; // @page height minus top/bottom margins
+  const CSS_PX_PER_IN = 96; // CSS spec-defined reference pixel density, not device DPI
+  const PAGE_CONTENT_HEIGHT_PX = PAGE_CONTENT_HEIGHT_IN * CSS_PX_PER_IN;
+
+  const printFrameRef = useRef(null);
+  const printSheetRef = useRef(null);
+
+  useEffect(() => {
+    const frame = printFrameRef.current;
+    const sheet = printSheetRef.current;
+    if (!frame || !sheet) return undefined;
+
+    const fitToPage = () => {
+      // Reset any scaling from a previous print so we measure true size
+      sheet.style.transform = 'none';
+      sheet.style.width = '100%';
+      // Force a reflow so scrollHeight reflects the reset state above
+      void sheet.offsetHeight;
+
+      const naturalHeight = sheet.scrollHeight; // the report's unscaled height
+      if (!naturalHeight) return;
+
+      const scale = PAGE_CONTENT_HEIGHT_PX / naturalHeight;
+
+      // Widen (or narrow) the sheet before scaling so that, once scaled,
+      // it lands back at exactly 100% of the page width too.
+      sheet.style.width = `${(1 / scale) * 100}%`;
+      sheet.style.transform = `scale(${scale})`;
+    };
+
+    const resetFit = () => {
+      sheet.style.transform = 'none';
+      sheet.style.width = '100%';
+    };
+
+    window.addEventListener('beforeprint', fitToPage);
+    window.addEventListener('afterprint', resetFit);
+    return () => {
+      window.removeEventListener('beforeprint', fitToPage);
+      window.removeEventListener('afterprint', resetFit);
+    };
+  }, [reportData, selectedPitcher, scoutingNotes]);
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 print:p-0 print:bg-white print:text-black">
+
+      <style>{`
+        @page {
+          size: letter portrait;
+          margin: 0.35in 0.35in 0.3in 0.35in;
+        }
+        @media print {
+          body {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            background-color: white !important;
+          }
+          .print-page-frame {
+            width: 100%;
+            height: 10.35in; /* @page height (11in) minus top/bottom @page margins */
+            overflow: hidden;
+            position: relative;
+          }
+          .print-report-sheet {
+            margin: 0 !important;
+            padding: 0 !important;
+            transform-origin: top left;
+          }
+        }
+      `}</style>
       
       {/* Top Navigation */}
       <nav className="flex gap-4 mb-8 border-b border-zinc-800 pb-4 max-w-7xl mx-auto print:hidden">
@@ -507,7 +588,9 @@ export default function App() {
                 </p>
               </div>
             ) : (
-              <div className="bg-white text-zinc-900 rounded-xl p-4 shadow-xl border border-zinc-200 print:shadow-none print:border-none print:p-0">
+              <div ref={printFrameRef} className="print-page-frame">
+              <div ref={printSheetRef} className="bg-white text-zinc-900 rounded-xl p-4 shadow-xl border border-zinc-200 print-report-sheet print:shadow-none print:border-none print:p-0">
+                
                 
                 {/* MAROON HEADER BOX */}
                 <div className="bg-[#7a0016] text-white rounded-lg p-3.5 font-sans shadow-inner space-y-2.5 print:[print-color-adjust:exact] print:bg-[#7a0016] print:text-white">
@@ -682,15 +765,15 @@ export default function App() {
                                 </span>
                                 
                                 {/* Middle: Gray track + Dynamic Pitch Color bar */}
-                              <div className="flex-1 bg-zinc-100 h-3.5 rounded-sm overflow-hidden flex items-center print:[print-color-adjust:exact] print:bg-zinc-100">
-                                <div 
-                                  className="h-full rounded-sm transition-all duration-300 print:[print-color-adjust:exact]"
-                                  style={{ 
-                                    width: `${Math.min(item.usage_pct, 100)}%`,
-                                    backgroundColor: getPitchColor(item.tagged_pitch_type) 
-                                  }} 
-                                />
-                              </div>
+                                <div className="flex-1 bg-zinc-100 h-3.5 rounded-sm overflow-hidden flex items-center print:[print-color-adjust:exact] print:bg-zinc-100">
+                                  <div 
+                                    className="h-full rounded-sm transition-all duration-300 print:[print-color-adjust:exact]"
+                                    style={{ 
+                                      width: `${Math.min(item.usage_pct, 100)}%`,
+                                      backgroundColor: getPitchColor(item.tagged_pitch_type) 
+                                    }} 
+                                  />
+                                </div>
 
                                 {/* Right: Pitch Name & Count */}
                                 <span className="w-24 text-left font-medium text-zinc-700 text-[10px] pl-2 shrink-0 truncate">
@@ -799,6 +882,92 @@ export default function App() {
                     getPitchColor={getPitchColor}
                   />
                 </div>
+                {/* ROW 4: PITCH SUMMARY & SCOUTING NOTES */}
+                <div className="mt-3 grid grid-cols-1 lg:grid-cols-12 gap-3 print:grid-cols-12 print:mt-2.5 print:gap-3">
+                  
+                  {/* LEFT 1/3: PITCH SUMMARY TABLE */}
+                  <div className="lg:col-span-4 print:col-span-4 border border-zinc-200 rounded-lg p-3 bg-white shadow-sm flex flex-col justify-between print:border-zinc-300 print:p-2.5">
+                    <div>
+                      <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2 print:text-zinc-700">
+                        PITCH SUMMARY
+                      </h3>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-[10px] text-center border-collapse">
+                          <thead>
+                            <tr className="border-b border-zinc-300 text-zinc-600 bg-zinc-100/80 font-bold uppercase tracking-tight print:bg-zinc-100 print:text-zinc-900 print:[print-color-adjust:exact]">
+                              <th className="p-1 text-left">Pitch</th>
+                              <th className="p-1">Strk</th>
+                              <th className="p-1">Ball</th>
+                              <th className="p-1">Strk%</th>
+                              <th className="p-1">Ball%</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-200 text-zinc-800 font-mono text-[10px] print:divide-zinc-300 print:text-black">
+                            {filteredMetrics.length === 0 ? (
+                              <tr>
+                                <td colSpan="5" className="p-3 text-center text-zinc-400 font-sans">
+                                  No summary available
+                                </td>
+                              </tr>
+                            ) : (
+                              filteredMetrics.map((row, idx) => {
+                                const total = row.pitch_count || 0;
+                                const strikes = row.strike_count || 0;
+                                const balls = Math.max(0, total - strikes);
+                                const strikePct = total > 0 ? Math.round((strikes / total) * 100) : 0;
+                                const ballPct = total > 0 ? Math.round((balls / total) * 100) : 0;
+
+                                return (
+                                  <tr key={idx} className="hover:bg-zinc-100/60 transition-colors">
+                                    <td className="p-1 text-left font-sans font-bold flex items-center gap-1.5">
+                                      <span 
+                                        className="w-2 h-2 rounded-full shrink-0" 
+                                        style={{ backgroundColor: getPitchColor(row.tagged_pitch_type) }}
+                                      />
+                                      <span className="truncate">{row.tagged_pitch_type}</span>
+                                    </td>
+                                    <td className="p-1 font-bold">{strikes}</td>
+                                    <td className="p-1">{balls}</td>
+                                    <td className="p-1 font-semibold">{strikePct}%</td>
+                                    <td className="p-1 font-semibold">{ballPct}%</td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* RIGHT 2/3: SCOUTING NOTES */}
+                  <div className="lg:col-span-8 print:col-span-8 border border-zinc-200 rounded-lg p-3 bg-white shadow-sm flex flex-col justify-between print:border-zinc-300 print:p-2.5">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider print:text-zinc-700">
+                        COACHING & SCOUTING NOTES
+                      </h3>
+                      <span className="text-[9px] text-zinc-400 font-medium print:hidden">
+                        Editable / Prints with sheet
+                      </span>
+                    </div>
+
+                    {/* Interactive on screen */}
+                    <textarea
+                      value={scoutingNotes}
+                      onChange={(e) => setScoutingNotes(e.target.value)}
+                      placeholder="Enter game notes, mechanics feedback, pitch shape observations, or opposing tendencies..."
+                      className="w-full flex-1 min-h-[120px] p-2 text-xs font-sans text-zinc-800 bg-zinc-50/60 border border-zinc-200 rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-[#7a0016] focus:border-[#7a0016] placeholder:text-zinc-400 leading-relaxed print:hidden"
+                    />
+
+                    {/* Fills the remaining vertical bottom space cleanly in print */}
+                    <div className="hidden print:block flex-1 min-h-[145px] p-2 text-[10px] font-sans text-zinc-900 border border-zinc-200 rounded-md whitespace-pre-wrap leading-relaxed">
+                      {scoutingNotes || <span className="text-zinc-300 italic">No notes recorded.</span>}
+                    </div>
+                  </div>
+
+                </div>
+              </div>
               </div>
             )}
           </section>

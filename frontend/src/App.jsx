@@ -27,14 +27,14 @@ const formatGameCardHeader = (game) => {
 
 // Pitch color mapping
 const PITCH_COLORS = {
-  Fastball: '#d94f54',   // Red / Coral
-  Sinker: '#e67e22',     // Orange
-  Cutter: '#8b5cf6',     // Purple
-  Slider: '#3b82f6',     // Blue
-  Sweeper: '#06b6d4',    // Cyan
-  Curveball: '#1e3a8a',  // Dark Navy
-  ChangeUp: '#14b8a6',   // Teal
-  Splitter: '#10b981',   // Emerald Green
+  Fastball: '#dc143c',   // Red
+  Sinker: '#f28500',     // Orange
+  Cutter: '#954535',     // Brown
+  Slider: '#ffef00',     // Yellow
+  Sweeper: '#eaa812',    // Gold
+  Curveball: '#4169e1',  // Blue
+  ChangeUp: '#50c878',   // Teal
+  Splitter: '#008080',   // Cyan
 };
 
 const getPitchColor = (pitchType) => PITCH_COLORS[pitchType] || '#7a0016';
@@ -945,18 +945,15 @@ export default function App() {
                   <div className="lg:col-span-8 print:col-span-8 border border-zinc-200 rounded-lg p-3 bg-white shadow-sm flex flex-col justify-between print:border-zinc-300 print:p-2.5">
                     <div className="flex items-center justify-between mb-1.5">
                       <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider print:text-zinc-700">
-                        COACHING & SCOUTING NOTES
+                        NOTES
                       </h3>
-                      <span className="text-[9px] text-zinc-400 font-medium print:hidden">
-                        Editable / Prints with sheet
-                      </span>
                     </div>
 
                     {/* Interactive on screen */}
                     <textarea
                       value={scoutingNotes}
                       onChange={(e) => setScoutingNotes(e.target.value)}
-                      placeholder="Enter game notes, mechanics feedback, pitch shape observations, or opposing tendencies..."
+                      placeholder="Type Here..."
                       className="w-full flex-1 min-h-[120px] p-2 text-xs font-sans text-zinc-800 bg-zinc-50/60 border border-zinc-200 rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-[#7a0016] focus:border-[#7a0016] placeholder:text-zinc-400 leading-relaxed print:hidden"
                     />
 
